@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Shield, LogOut, Plus, Edit, Trash2, DollarSign, MapPin, Route as RouteIcon, Save } from 'lucide-react';
+import { Shield, LogOut, Plus, Edit, Trash2, DollarSign, MapPin, Route as RouteIcon, Save, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { STOPS, TRANSPORT_ROUTES } from '@/data/transportData';
+import { AdminHazardVerification } from '@/components/safety/AdminHazardVerification';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -86,8 +87,12 @@ const AdminDashboard = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-12 max-w-7xl relative z-10">
-        <Tabs defaultValue="fares" className="space-y-8">
-          <TabsList className="grid w-full grid-cols-3 max-w-2xl mx-auto bg-card/50 backdrop-blur-xl border border-border/50 p-1.5 h-14 rounded-2xl">
+        <Tabs defaultValue="hazards" className="space-y-8">
+          <TabsList className="grid w-full grid-cols-4 max-w-3xl mx-auto bg-card/50 backdrop-blur-xl border border-border/50 p-1.5 h-14 rounded-2xl">
+            <TabsTrigger value="hazards" className="rounded-xl text-base data-[state=active]:bg-red-500 data-[state=active]:text-white data-[state=active]:shadow-lg">
+              <AlertTriangle className="w-4 h-4 mr-2" />
+              Hazards
+            </TabsTrigger>
             <TabsTrigger value="fares" className="rounded-xl text-base data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-lg">
               <DollarSign className="w-4 h-4 mr-2" />
               Fares
@@ -101,6 +106,16 @@ const AdminDashboard = () => {
               Stops
             </TabsTrigger>
           </TabsList>
+
+          {/* Hazard Verification */}
+          <TabsContent value="hazards" className="space-y-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <AdminHazardVerification />
+            </motion.div>
+          </TabsContent>
 
           {/* Fares Management */}
           <TabsContent value="fares" className="space-y-6">

@@ -8,7 +8,9 @@ import {
   TRANSPORT_ROUTES,
   COLLEGE_BUS_ROUTE,
   HOME,
-  WEIGHTS
+  WEIGHTS,
+  calculateCrimeScore,
+  getPolicePatrolsOnRoute
 } from '@/data/transportData';
 
 /**
@@ -194,12 +196,16 @@ function enhancedSSSP(
     visited.add(stateKey);
 
     if (current.stop.id === end.id) {
+      const routeStops = current.segments.flatMap(seg => [seg.from, seg.to]);
       allPaths.push({
         totalTime: current.totalTime,
         totalFare: current.totalFare,
         transfers: current.transfers,
         segments: current.segments,
-        score: current.score
+        score: current.score,
+        crimeScore: calculateCrimeScore(routeStops),
+        policePresence: routeStops.some(stop => stop.policePatrol?.isActive),
+        policePatrols: getPolicePatrolsOnRoute(routeStops)
       });
       
       if (allPaths.length >= 5) break;
@@ -290,12 +296,16 @@ function findRoutesHeuristic(fromStop: Stop): RouteOption[] {
         waitTime: 5
       };
 
+      const routeStops = [fromStop, HOME];
       const option: RouteOption = {
         totalTime: segment.time + (segment.waitTime || 0),
         totalFare: segment.fare,
         transfers: 0,
         segments: [segment],
-        score: 0
+        score: 0,
+        crimeScore: calculateCrimeScore(routeStops),
+        policePresence: routeStops.some(stop => stop.policePatrol?.isActive),
+        policePatrols: getPolicePatrolsOnRoute(routeStops)
       };
 
       option.score = calculateScore(option);
@@ -338,12 +348,16 @@ function findRoutesHeuristic(fromStop: Stop): RouteOption[] {
             waitTime: 10
           };
 
+          const routeStops = [fromStop, transferStop, HOME];
           const option: RouteOption = {
             totalTime: segment1.time + segment2.time + (segment1.waitTime || 0) + (segment2.waitTime || 0),
             totalFare: segment1.fare + segment2.fare,
             transfers: 1,
             segments: [segment1, segment2],
-            score: 0
+            score: 0,
+            crimeScore: calculateCrimeScore(routeStops),
+            policePresence: routeStops.some(stop => stop.policePatrol?.isActive),
+            policePatrols: getPolicePatrolsOnRoute(routeStops)
           };
 
           option.score = calculateScore(option);

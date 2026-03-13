@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Route, Sparkles, Search, Shield, Smartphone, AlertCircle } from 'lucide-react';
+import { MapPin, Route, Sparkles, Search, Shield, Smartphone, AlertCircle, AlertTriangle, Navigation, UserCircle, Settings, TrendingUp, Phone, Car, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import RouteVisualization from '@/components/RouteVisualization';
 import RouteComparison from '@/components/RouteComparison';
 import OptimalRecommendation from '@/components/OptimalRecommendation';
+import { PolicePatrolInfo } from '@/components/PolicePatrolInfo';
 import { calculateOptimalRoute, getBestDropPoint } from '@/utils/routeOptimizer';
 import { DropPoint, STOPS, COLLEGE_BUS_ROUTE } from '@/data/transportData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 
 const Index = () => {
   const [dropPoints, setDropPoints] = useState<DropPoint[]>([]);
@@ -74,6 +76,12 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Link to="/diagnostic">
+                <Button className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white border-0 shadow-lg">
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Research Demo
+                </Button>
+              </Link>
               <Link to="/login">
                 <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border-0 shadow-lg">
                   <Smartphone className="w-4 w-4 mr-2" />
@@ -103,8 +111,238 @@ const Index = () => {
         </div>
       </header>
 
+      {/* Quick Access Dashboard */}
+      <section className="container mx-auto px-6 py-12 max-w-7xl relative z-10">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          {/* Section Header */}
+          <div className="text-center mb-12">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 200, delay: 0.2 }}
+              className="inline-flex items-center gap-3 bg-gradient-to-r from-primary/20 to-secondary/20 backdrop-blur-lg border border-primary/30 rounded-full px-6 py-3 mb-6"
+            >
+              <Sparkles className="w-5 h-5 text-primary animate-pulse" />
+              <h2 className="text-xl font-bold text-foreground tracking-wide">Quick Access Dashboard</h2>
+            </motion.div>
+            <p className="text-muted-foreground text-sm max-w-2xl mx-auto">
+              Navigate through all features with a single click - designed for speed and simplicity
+            </p>
+          </div>
+          
+          {/* Icon Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-6">
+            {/* Route Planning */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1 }}
+              whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => document.getElementById('route-planning-section')?.scrollIntoView({ behavior: 'smooth' })}
+              className="group relative bg-gradient-to-br from-blue-500/90 via-blue-600/90 to-blue-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 border border-blue-400/20 overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <motion.div
+                whileHover={{ rotate: 360 }}
+                transition={{ duration: 0.6 }}
+                className="relative"
+              >
+                <Route className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
+              </motion.div>
+              <h3 className="font-bold text-white mb-1 text-base">Route Planning</h3>
+              <p className="text-xs text-blue-50 opacity-90">Find optimal routes</p>
+              <div className="mt-2 text-[10px] text-blue-100 font-semibold">1,247+ routes calculated</div>
+              <div className="absolute top-3 right-3 w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+            </motion.div>
+
+            {/* Emergency SOS */}
+            <Link to="/safety">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.15 }}
+                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
+                whileTap={{ scale: 0.95 }}
+                className="group relative bg-gradient-to-br from-red-500/90 via-red-600/90 to-red-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-red-500/50 transition-all duration-300 border border-red-400/20 overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <motion.div
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ repeat: Infinity, duration: 2 }}
+                  className="relative"
+                >
+                  <AlertCircle className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
+                </motion.div>
+                <h3 className="font-bold text-white mb-1 text-base">Emergency SOS</h3>
+                <p className="text-xs text-red-50 opacity-90">Quick help button</p>
+                <div className="mt-2 text-[10px] text-red-100 font-semibold">24/7 Active • 3 patrols nearby</div>
+                <Badge className="absolute top-3 right-3 bg-yellow-400 text-black text-[10px] font-bold animate-pulse">URGENT</Badge>
+              </motion.div>
+            </Link>
+
+            {/* Hazard Reporting */}
+            <Link to="/safety">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 }}
+                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
+                whileTap={{ scale: 0.95 }}
+                className="group relative bg-gradient-to-br from-orange-500/90 via-orange-600/90 to-orange-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-orange-500/50 transition-all duration-300 border border-orange-400/20 overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <motion.div
+                  whileHover={{ rotate: [0, -10, 10, 0] }}
+                  transition={{ duration: 0.5 }}
+                  className="relative"
+                >
+                  <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
+                </motion.div>
+                <h3 className="font-bold text-white mb-1 text-base">Report Hazard</h3>
+                <p className="text-xs text-orange-50 opacity-90">Alert community</p>
+                <div className="mt-2 text-[10px] text-orange-100 font-semibold">89 reports verified today</div>
+              </motion.div>
+            </Link>
+
+            {/* Police Patrol */}
+            <Link to="/police-patrol">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.25 }}
+                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
+                whileTap={{ scale: 0.95 }}
+                className="group relative bg-gradient-to-br from-indigo-500/90 via-indigo-600/90 to-indigo-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-indigo-500/50 transition-all duration-300 border border-indigo-400/20 overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <motion.div
+                  whileHover={{ scale: 1.2 }}
+                  transition={{ type: "spring", stiffness: 300 }}
+                  className="relative"
+                >
+                  <Shield className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
+                </motion.div>
+                <h3 className="font-bold text-white mb-1 text-base">Police Patrol</h3>
+                <p className="text-xs text-indigo-50 opacity-90">Daily shift entry</p>
+                <div className="mt-2 text-[10px] text-indigo-100 font-semibold">12 active patrols • 8 zones covered</div>
+                <Badge className="absolute top-3 right-3 bg-yellow-400 text-black text-[10px] font-bold">For Police</Badge>
+              </motion.div>
+            </Link>
+
+            {/* Emergency Contacts */}
+            <Link to="/safety">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.3 }}
+                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
+                whileTap={{ scale: 0.95 }}
+                className="group relative bg-gradient-to-br from-green-500/90 via-green-600/90 to-green-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-green-500/50 transition-all duration-300 border border-green-400/20 overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <motion.div
+                  whileHover={{ rotate: [0, 15, -15, 0] }}
+                  transition={{ duration: 0.5 }}
+                  className="relative"
+                >
+                  <Phone className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
+                </motion.div>
+                <h3 className="font-bold text-white mb-1 text-base">Emergency Contacts</h3>
+                <p className="text-xs text-green-50 opacity-90">Manage contacts</p>
+                <div className="mt-2 text-[10px] text-green-100 font-semibold">456 contacts saved</div>
+              </motion.div>
+            </Link>
+
+            {/* Delivery Platform */}
+            <Link to="/mobile">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.45 }}
+                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
+                whileTap={{ scale: 0.95 }}
+                className="group relative bg-gradient-to-br from-pink-500/90 via-pink-600/90 to-pink-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-pink-500/50 transition-all duration-300 border border-pink-400/20 overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <motion.div
+                  animate={{ x: [-2, 2, -2] }}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                  className="relative"
+                >
+                  <Car className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
+                </motion.div>
+                <h3 className="font-bold text-white mb-1 text-base">Delivery Riders</h3>
+                <p className="text-xs text-pink-50 opacity-90">For Zomato/Swiggy</p>
+                <div className="mt-2 text-[10px] text-pink-100 font-semibold">234 riders using app</div>
+              </motion.div>
+            </Link>
+
+            {/* Mobile App */}
+            <Link to="/mobile">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.5 }}
+                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
+                whileTap={{ scale: 0.95 }}
+                className="group relative bg-gradient-to-br from-cyan-500/90 via-cyan-600/90 to-cyan-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-cyan-500/50 transition-all duration-300 border border-cyan-400/20 overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <motion.div
+                  whileHover={{ rotateZ: 10 }}
+                  transition={{ type: "spring", stiffness: 300 }}
+                  className="relative"
+                >
+                  <Smartphone className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
+                </motion.div>
+                <h3 className="font-bold text-white mb-1 text-base">Mobile View</h3>
+                <p className="text-xs text-cyan-50 opacity-90">Optimized UI</p>
+                <div className="mt-2 text-[10px] text-cyan-100 font-semibold">567 active users online</div>
+              </motion.div>
+            </Link>
+
+            {/* Login */}
+            <Link to="/login">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.55 }}
+                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
+                whileTap={{ scale: 0.95 }}
+                className="group relative bg-gradient-to-br from-slate-600/90 via-slate-700/90 to-slate-800/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-slate-500/50 transition-all duration-300 border border-slate-400/20 overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <motion.div
+                  whileHover={{ rotate: 180 }}
+                  transition={{ duration: 0.5 }}
+                  className="relative"
+                >
+                  <Settings className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
+                </motion.div>
+                <h3 className="font-bold text-white mb-1 text-base">Login</h3>
+                <p className="text-xs text-slate-200 opacity-90">User account</p>
+                <div className="mt-2 text-[10px] text-slate-300 font-semibold">Secure OTP authentication</div>
+              </motion.div>
+            </Link>
+          </div>
+
+          {/* Bottom Accent */}
+          <motion.div
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ delay: 0.8, duration: 0.8 }}
+            className="mt-12 h-1 bg-gradient-to-r from-transparent via-primary to-transparent rounded-full"
+          />
+        </motion.div>
+      </section>
+
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-12 max-w-7xl relative z-10">
+      <main className="container mx-auto px-6 py-12 max-w-7xl relative z-10" id="route-planning-section">
         {/* Hero Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -132,7 +370,7 @@ const Index = () => {
               </div>
 
               {/* Input Form */}
-              <div className="mt-8 space-y-6 bg-card/50 backdrop-blur-sm rounded-2xl p-6 border border-border/30">
+              <div className="mt-8 space-y-6 bg-background/80 backdrop-blur-sm rounded-2xl p-6 border border-border/30 shadow-lg">
                 <div className="grid md:grid-cols-2 gap-6">
                   {/* Source Start */}
                   <div className="space-y-2">
@@ -140,10 +378,10 @@ const Index = () => {
                       Source Start (Moving Vehicle Route)
                     </Label>
                     <Select value={sourceStart} onValueChange={setSourceStart}>
-                      <SelectTrigger className="h-12 text-base">
+                      <SelectTrigger className="h-12 text-base bg-background border-border">
                         <SelectValue placeholder="Select starting point..." />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-background">
                         {busRouteStops.map((stop) => (
                           <SelectItem key={stop.id} value={stop.id}>
                             {stop.name}
@@ -159,10 +397,10 @@ const Index = () => {
                       Source Stop (End of Vehicle Route)
                     </Label>
                     <Select value={sourceStop} onValueChange={setSourceStop}>
-                      <SelectTrigger className="h-12 text-base">
+                      <SelectTrigger className="h-12 text-base bg-background border-border">
                         <SelectValue placeholder="Select ending point..." />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-background">
                         {busRouteStops.map((stop) => (
                           <SelectItem key={stop.id} value={stop.id}>
                             {stop.name}
@@ -178,10 +416,10 @@ const Index = () => {
                       Final Destination
                     </Label>
                     <Select value={destination} onValueChange={setDestination}>
-                      <SelectTrigger className="h-12 text-base">
+                      <SelectTrigger className="h-12 text-base bg-background border-border">
                         <SelectValue placeholder="Where do you want to go?" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-background">
                         {allStops.map((stop) => (
                           <SelectItem key={stop.id} value={stop.id}>
                             {stop.name}
@@ -197,10 +435,10 @@ const Index = () => {
                       Fare Budget
                     </Label>
                     <Select value={fareBudget} onValueChange={setFareBudget}>
-                      <SelectTrigger className="h-12 text-base">
+                      <SelectTrigger className="h-12 text-base bg-background border-border">
                         <SelectValue placeholder="How much can you spend?" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-background">
                         {fareBudgetOptions.map((budget) => (
                           <SelectItem key={budget} value={budget}>
                             {budget}
@@ -280,6 +518,20 @@ const Index = () => {
                 bestDropPoint={bestDropPoint}
                 onHighlight={setHighlightedStopId}
               />
+              
+              {/* Police Patrol Information */}
+              {bestDropPoint && bestDropPoint.stop && bestDropPoint.stop.coordinates && (
+                <PolicePatrolInfo
+                  sourceLocation={{ 
+                    lat: bestDropPoint.stop.coordinates.lat, 
+                    lng: bestDropPoint.stop.coordinates.lng 
+                  }}
+                  destinationLocation={{ 
+                    lat: bestDropPoint.stop.coordinates.lat, 
+                    lng: bestDropPoint.stop.coordinates.lng 
+                  }}
+                />
+              )}
             </TabsContent>
 
             <TabsContent value="route" className="space-y-6">

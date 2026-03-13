@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
-import { Clock, IndianRupee, ArrowRight, Award } from 'lucide-react';
-import { DropPoint } from '@/data/transportData';
+import { Clock, IndianRupee, ArrowRight, Award, Shield } from 'lucide-react';
+import { DropPoint, calculateCrimeScore, getPolicePatrolsOnRoute, getCrimeRateLabel } from '@/data/transportData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
@@ -26,6 +26,12 @@ const RouteComparison = ({ dropPoints, bestDropPoint }: RouteComparisonProps) =>
 
           if (!route) return null;
 
+          // Calculate crime score for the route
+          const routeStops = route.segments.flatMap(seg => [seg.from, seg.to]);
+          const crimeScore = route.crimeScore || calculateCrimeScore(routeStops);
+          const policePatrols = route.policePatrols || getPolicePatrolsOnRoute(routeStops);
+          const crimeLabel = getCrimeRateLabel(crimeScore);
+
           return (
             <motion.div
               key={dropPoint.stop.id}
@@ -50,6 +56,24 @@ const RouteComparison = ({ dropPoints, bestDropPoint }: RouteComparisonProps) =>
                         </Badge>
                       )}
                     </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Badge 
+                        className={`flex items-center gap-1 ${
+                          crimeScore >= 80 ? 'bg-green-500/20 text-green-700 border-green-500/30' :
+                          crimeScore >= 60 ? 'bg-blue-500/20 text-blue-700 border-blue-500/30' :
+                          crimeScore >= 40 ? 'bg-yellow-500/20 text-yellow-700 border-yellow-500/30' :
+                          'bg-red-500/20 text-red-700 border-red-500/30'
+                        }`}
+                      >
+                        <Shield className="w-3 h-3" />
+                        {crimeLabel}
+                      </Badge>
+                      {policePatrols.length > 0 && (
+                        <Badge className="bg-blue-500/20 text-blue-700 border-blue-500/30">
+                          🚔 {policePatrols.length} Patrol{policePatrols.length > 1 ? 's' : ''}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">

@@ -11,6 +11,7 @@ import MobileAdminDashboard from "./pages/MobileAdminDashboard";
 import DiagnosticTest from "./pages/DiagnosticTest";
 import SafetyDashboard from "./pages/SafetyDashboard";
 import OTPLogin from "./pages/OTPLogin";
+import PolicePatrolPage from "./pages/PolicePatrolPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => {
             <Route path="/login" element={<OTPLogin />} />
             <Route path="/mobile" element={<MobileUserDashboard />} />
             <Route path="/safety" element={<SafetyDashboard />} />
+            <Route path="/police-patrol" element={<PolicePatrolPage />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/mobile" element={<MobileAdminDashboard />} />

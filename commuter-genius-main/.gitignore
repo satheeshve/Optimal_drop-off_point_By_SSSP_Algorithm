@@ -1,3 +1,7 @@
+# ===================================
+# Frontend (Node.js / Vite)
+# ===================================
+
 # Logs
 logs
 *.log
@@ -7,14 +11,86 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+package-lock.json
+
+# Build outputs
 dist
 dist-ssr
+build
 *.local
 
+# ===================================
+# Backend (Python / FastAPI)
+# ===================================
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+backend/venv/
+backend/env/
+backend/ENV/
+.venv
+venv/
+env/
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+backend/commuter_genius.db
+backend/*.db
+
+# ===================================
+# Environment & Secrets
+# ===================================
+
+# Environment files (SECURITY CRITICAL)
+.env
+.env.local
+.env.*.local
+backend/.env
+backend/.env.local
+.env.production.local
+backend/.env.production.local
+
+# Keep example files
+!.env.example
+!.env.docker
+!.env.production
+!backend/.env.example
+!backend/.env.production
+
+# Secrets and keys
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+ssl/
+
+# ===================================
+# Docker
+# ===================================
+
+# Docker volumes
+docker/volumes/
+docker-compose.override.yml
+
+# ===================================
 # Editor directories and files
+# ===================================
+
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -22,3 +98,109 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.swp
+*.swo
+*~
+
+# ===================================
+# Testing & Coverage
+# ===================================
+
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+junit.xml
+coverage.xml
+
+# ===================================
+# OS Files
+# ===================================
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+.directory
+.Trash-*
+
+# ===================================
+# Temporary Files
+# ===================================
+
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+*_backup
+*_old
+
+# ===================================
+# Production & Deployment
+# ===================================
+
+# Don't commit production builds
+# (should be built on server)
+# dist/
+
+# Backup files
+backups/
+*.sql.gz
+*.dump
+
+# SSL certificates (use secrets management)
+*.crt
+*.pem
+*.key
+
+# ===================================
+# IDE / Tools
+# ===================================
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Visual Studio Code
+.history/
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# ===================================
+# Project Specific
+# ===================================
+
+# Large data files
+data/*.csv
+data/*.json
+!data/sample*.csv
+!data/sample*.json
+
+# User uploads (if any)
+uploads/
+media/
+
+# Generated documentation
+docs/_build/
+
+# Performance profiling
+*.prof
+*.lprof

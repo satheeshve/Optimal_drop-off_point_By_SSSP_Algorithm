@@ -1,0 +1,24 @@
+# FastAPI Backend Requirements
+# As per IEEE Paper Implementation
+# Using Python 3.13 compatible versions with pre-built wheels
+
+fastapi==0.128.0
+uvicorn[standard]==0.40.0
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.11
+geoalchemy2==0.14.3
+pydantic==2.12.5
+pydantic-settings==2.1.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+email-validator==2.1.0
+python-dotenv==1.0.0
+redis==5.0.1
+geopy==2.4.1
+aiohttp==3.12.15
+
+# For testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+httpx==0.26.0

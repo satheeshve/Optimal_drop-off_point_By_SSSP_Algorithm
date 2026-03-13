@@ -4,6 +4,17 @@ export interface Stop {
   lat: number;
   lng: number;
   type: 'bus' | 'metro' | 'train';
+  crimeRate?: 'low' | 'medium' | 'high'; // Crime rate for the area
+  policePatrol?: PolicePatrolData; // Active police patrol in area
+}
+
+export interface PolicePatrolData {
+  isActive: boolean;
+  patrolName: string;
+  officerName: string;
+  contactNumber: string;
+  shiftTime: string;
+  vehicleNumber: string;
 }
 
 export interface Route {
@@ -29,6 +40,9 @@ export interface RouteOption {
   transfers: number;
   segments: RouteSegment[];
   score: number; // optimization score
+  crimeScore?: number; // Crime safety score (0-100, higher is safer)
+  policePresence?: boolean; // Whether police patrol is active on route
+  policePatrols?: PolicePatrolData[]; // List of active patrols along route
 }
 
 export interface RouteSegment {
@@ -41,56 +55,119 @@ export interface RouteSegment {
   waitTime?: number;
 }
 
-// Chennai Transport Data - Real locations
+// Chennai Transport Data - Real locations with Crime Rates and Police Patrols
 export const STOPS: Record<string, Stop> = {
   planetarium: {
     id: 'planetarium',
     name: 'Birla Planetarium',
     lat: 13.0475,
     lng: 80.2379,
-    type: 'bus'
+    type: 'bus',
+    crimeRate: 'low',
+    policePatrol: {
+      isActive: true,
+      patrolName: 'Zone-1 Tourist Area Patrol',
+      officerName: 'Inspector Ramesh Kumar',
+      contactNumber: '+91-9840123456',
+      shiftTime: '08:00 AM - 08:00 PM',
+      vehicleNumber: 'TN01-P-1234'
+    }
   },
   guindy: {
     id: 'guindy',
     name: 'Guindy Metro Station',
     lat: 13.0096,
     lng: 80.2209,
-    type: 'metro'
+    type: 'metro',
+    crimeRate: 'low',
+    policePatrol: {
+      isActive: true,
+      patrolName: 'Zone-2 Metro Security',
+      officerName: 'Sub-Inspector Priya Menon',
+      contactNumber: '+91-9840234567',
+      shiftTime: '06:00 AM - 10:00 PM',
+      vehicleNumber: 'TN01-P-2345'
+    }
   },
   cmbt: {
     id: 'cmbt',
     name: 'Koyambedu CMBT',
     lat: 13.0703,
     lng: 80.2034,
-    type: 'bus'
+    type: 'bus',
+    crimeRate: 'medium',
+    policePatrol: {
+      isActive: true,
+      patrolName: 'Zone-3 CMBT Security',
+      officerName: 'Inspector Suresh Babu',
+      contactNumber: '+91-9840345678',
+      shiftTime: '24/7 Coverage',
+      vehicleNumber: 'TN01-P-3456'
+    }
   },
   redhills: {
     id: 'redhills',
     name: 'Red Hills',
     lat: 13.1479,
     lng: 80.1849,
-    type: 'bus'
+    type: 'bus',
+    crimeRate: 'medium',
+    policePatrol: {
+      isActive: true,
+      patrolName: 'Zone-4 North Chennai Patrol',
+      officerName: 'Head Constable Venkat',
+      contactNumber: '+91-9840456789',
+      shiftTime: '06:00 PM - 06:00 AM',
+      vehicleNumber: 'TN01-P-4567'
+    }
   },
   college: {
     id: 'college',
     name: 'College',
     lat: 13.1854,
     lng: 80.2547,
-    type: 'bus'
+    type: 'bus',
+    crimeRate: 'low',
+    policePatrol: {
+      isActive: true,
+      patrolName: 'Zone-5 Educational Area Patrol',
+      officerName: 'Inspector Lakshmi Devi',
+      contactNumber: '+91-9840567890',
+      shiftTime: '07:00 AM - 09:00 PM',
+      vehicleNumber: 'TN01-P-5678'
+    }
   },
   central: {
     id: 'central',
     name: 'Chennai Central',
     lat: 13.0827,
     lng: 80.2707,
-    type: 'metro'
+    type: 'metro',
+    crimeRate: 'medium',
+    policePatrol: {
+      isActive: true,
+      patrolName: 'Zone-6 Railway Protection Force',
+      officerName: 'Inspector Arun Prakash',
+      contactNumber: '+91-9840678901',
+      shiftTime: '24/7 Coverage',
+      vehicleNumber: 'TN01-P-6789'
+    }
   },
   avadi: {
     id: 'avadi',
     name: 'Avadi',
     lat: 13.1147,
     lng: 79.9864,
-    type: 'bus'
+    type: 'bus',
+    crimeRate: 'low',
+    policePatrol: {
+      isActive: true,
+      patrolName: 'Zone-7 Avadi Town Patrol',
+      officerName: 'Sub-Inspector Murugan',
+      contactNumber: '+91-9840789012',
+      shiftTime: '05:00 PM - 11:00 PM',
+      vehicleNumber: 'TN01-P-7890'
+    }
   }
 };
 
@@ -239,3 +316,48 @@ export const WEIGHTS = {
 };
 
 export const HOME = STOPS.avadi;
+
+// Helper function to calculate crime safety score for a route
+export function calculateCrimeScore(stops: Stop[]): number {
+  const crimeRatings = { low: 100, medium: 60, high: 20 };
+  let totalScore = 0;
+  let count = 0;
+
+  stops.forEach(stop => {
+    if (stop.crimeRate) {
+      totalScore += crimeRatings[stop.crimeRate];
+      count++;
+    }
+  });
+
+  return count > 0 ? Math.round(totalScore / count) : 75; // Default to 75 if no data
+}
+
+// Helper function to get all police patrols along a route
+export function getPolicePatrolsOnRoute(stops: Stop[]): PolicePatrolData[] {
+  const patrols: PolicePatrolData[] = [];
+  
+  stops.forEach(stop => {
+    if (stop.policePatrol && stop.policePatrol.isActive) {
+      patrols.push(stop.policePatrol);
+    }
+  });
+
+  return patrols;
+}
+
+// Helper function to get crime rate label
+export function getCrimeRateLabel(score: number): string {
+  if (score >= 80) return 'Very Safe';
+  if (score >= 60) return 'Safe';
+  if (score >= 40) return 'Moderate Risk';
+  return 'High Risk';
+}
+
+// Helper function to get crime rate color
+export function getCrimeRateColor(score: number): string {
+  if (score >= 80) return 'text-green-600';
+  if (score >= 60) return 'text-blue-600';
+  if (score >= 40) return 'text-yellow-600';
+  return 'text-red-600';
+}

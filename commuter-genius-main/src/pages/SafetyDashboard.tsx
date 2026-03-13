@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { SOSButton } from '../components/safety/SOSButton';
 import { EmergencyContactsManager } from '../components/safety/EmergencyContactsManager';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
+import { HazardReportForm } from '../components/safety/HazardReportForm';
 import { Link } from 'react-router-dom';
 
 export default function SafetyDashboard() {
@@ -307,6 +308,9 @@ export default function SafetyDashboard() {
 
       {/* Floating SOS Button */}
       <SOSButton />
+      
+      {/* Floating Hazard Report Button */}
+      <HazardReportForm />
     </div>
   );
 }
