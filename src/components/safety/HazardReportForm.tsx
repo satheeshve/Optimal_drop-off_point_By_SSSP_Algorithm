@@ -99,7 +99,7 @@ export function HazardReportForm() {
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
-        className="fixed bottom-6 right-6 z-50"
+        className="fixed bottom-28 right-6 sm:bottom-6 sm:right-28 z-50"
       >
         <Button
           onClick={() => setIsOpen(true)}
