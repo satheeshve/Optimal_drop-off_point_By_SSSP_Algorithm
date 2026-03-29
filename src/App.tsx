@@ -8,7 +8,6 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import MobileUserDashboard from "./pages/MobileUserDashboard";
 import MobileAdminDashboard from "./pages/MobileAdminDashboard";
-import DiagnosticTest from "./pages/DiagnosticTest";
 import SafetyDashboard from "./pages/SafetyDashboard";
 import OTPLogin from "./pages/OTPLogin";
 import PolicePatrolPage from "./pages/PolicePatrolPage";
@@ -28,7 +27,6 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/test" element={<DiagnosticTest />} />
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<OTPLogin />} />
             <Route path="/mobile" element={<MobileUserDashboard />} />

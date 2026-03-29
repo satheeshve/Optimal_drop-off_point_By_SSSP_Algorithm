@@ -43,7 +43,7 @@ echo  ALL TESTS COMPLETED!
 echo ============================================
 echo.
 echo Next steps:
-echo 1. Run START_DEMO.bat to start the full application
+echo 1. Run START_LOCAL.bat to start the full application
 echo 2. Open http://localhost:8080
 echo 3. Click "Police Patrol" icon
 echo 4. You should see 4 default patrol routes!

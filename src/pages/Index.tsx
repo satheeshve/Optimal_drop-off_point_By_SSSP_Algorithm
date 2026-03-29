@@ -1,31 +1,307 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Route, Sparkles, Search, Shield, Smartphone, AlertCircle, AlertTriangle, Navigation, UserCircle, Settings, TrendingUp, Phone, Car, Clock } from 'lucide-react';
+import { MapPin, Route, Sparkles, Search, Shield, Smartphone, AlertCircle, AlertTriangle, UserCircle, Settings, TrendingUp, Phone, Car, Clock, Check, ChevronsUpDown, Siren, GraduationCap, Briefcase, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import RouteVisualization from '@/components/RouteVisualization';
 import RouteComparison from '@/components/RouteComparison';
 import OptimalRecommendation from '@/components/OptimalRecommendation';
+import { InteractiveMap } from '@/components/InteractiveMap';
 import { PolicePatrolInfo } from '@/components/PolicePatrolInfo';
 import { calculateOptimalRoute, getBestDropPoint } from '@/utils/routeOptimizer';
-import { DropPoint, STOPS, COLLEGE_BUS_ROUTE } from '@/data/transportData';
+import { DropPoint, STOPS, COLLEGE_BUS_ROUTE, Stop } from '@/data/transportData';
+import { getGoogleTransitRoute, getOpenRoute, getGtfsLiveFeed, planRoute, GoogleTransitRoute, GTFSLiveFeedResponse, OpenRouteResponse } from '@/utils/apiService';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+
+interface DemoLocationOption {
+  id: string;
+  name: string;
+  zone: 'Central' | 'OMR' | 'North Chennai' | 'West Chennai';
+}
+
+const SOURCE_ROUTE_OPTIONS: DemoLocationOption[] = [
+  { id: 'planetarium', name: 'Birla Planetarium', zone: 'Central' },
+  { id: 'guindy', name: 'Guindy Metro Station', zone: 'Central' },
+  { id: 'little_mount', name: 'Little Mount Metro', zone: 'Central' },
+  { id: 'saidapet', name: 'Saidapet', zone: 'Central' },
+  { id: 'teynampet', name: 'Teynampet', zone: 'Central' },
+  { id: 'cmbt', name: 'Koyambedu CMBT', zone: 'West Chennai' },
+  { id: 'anna_nagar', name: 'Anna Nagar Roundtana', zone: 'West Chennai' },
+  { id: 'villivakkam', name: 'Villivakkam', zone: 'West Chennai' },
+  { id: 'redhills', name: 'Red Hills', zone: 'North Chennai' },
+  { id: 'rmkcet', name: 'R.M.K College of Engineering and Technology', zone: 'North Chennai' },
+  { id: 'central', name: 'Chennai Central', zone: 'Central' },
+  { id: 'avadi', name: 'Avadi', zone: 'West Chennai' },
+  { id: 'thoraipakkam', name: 'Thoraipakkam OMR', zone: 'OMR' },
+  { id: 'sholinganallur', name: 'Sholinganallur', zone: 'OMR' },
+  { id: 'navalur', name: 'Navalur', zone: 'OMR' },
+  { id: 'siruseri', name: 'Siruseri SIPCOT', zone: 'OMR' },
+];
+
+const DESTINATION_OPTIONS: DemoLocationOption[] = [
+  { id: 'avadi', name: 'Avadi', zone: 'West Chennai' },
+  { id: 'central', name: 'Chennai Central', zone: 'Central' },
+  { id: 'egmore', name: 'Egmore', zone: 'Central' },
+  { id: 'guindy', name: 'Guindy', zone: 'Central' },
+  { id: 'tnagar', name: 'T. Nagar', zone: 'Central' },
+  { id: 'velachery', name: 'Velachery', zone: 'OMR' },
+  { id: 'thoraipakkam', name: 'Thoraipakkam OMR', zone: 'OMR' },
+  { id: 'sholinganallur', name: 'Sholinganallur', zone: 'OMR' },
+  { id: 'navalur', name: 'Navalur', zone: 'OMR' },
+  { id: 'siruseri', name: 'Siruseri SIPCOT', zone: 'OMR' },
+  { id: 'tambaram', name: 'Tambaram', zone: 'West Chennai' },
+  { id: 'porur', name: 'Porur', zone: 'West Chennai' },
+  { id: 'redhills', name: 'Red Hills', zone: 'North Chennai' },
+  { id: 'rmkcet', name: 'R.M.K College of Engineering and Technology', zone: 'North Chennai' },
+];
+
+const STOP_ZONE_MAP: Record<string, DemoLocationOption['zone']> = {
+  planetarium: 'Central',
+  guindy: 'Central',
+  central: 'Central',
+  cmbt: 'West Chennai',
+  avadi: 'West Chennai',
+  redhills: 'North Chennai',
+  rmkcet: 'North Chennai',
+};
+
+const NETWORK_STOP_ALIASES: Record<string, string> = {
+  planetarium: 'planetarium',
+  guindy: 'guindy',
+  cmbt: 'cmbt',
+  redhills: 'redhills',
+  rmkcet: 'rmkcet',
+  central: 'central',
+  avadi: 'avadi',
+  little_mount: 'guindy',
+  saidapet: 'guindy',
+  teynampet: 'central',
+  anna_nagar: 'cmbt',
+  villivakkam: 'cmbt',
+  egmore: 'central',
+  tnagar: 'guindy',
+  velachery: 'guindy',
+  thoraipakkam: 'guindy',
+  sholinganallur: 'guindy',
+  navalur: 'redhills',
+  siruseri: 'redhills',
+  tambaram: 'guindy',
+  porur: 'cmbt',
+};
+
+const resolveNetworkStopId = (id: string): string => {
+  if (!id) return 'central';
+  const mappedId = NETWORK_STOP_ALIASES[id] || id;
+  return STOPS[mappedId] ? mappedId : 'central';
+};
+
+const ZONE_ORDER: DemoLocationOption['zone'][] = ['Central', 'OMR', 'North Chennai', 'West Chennai'];
+
+interface DemoPreset {
+  id: string;
+  title: string;
+  description: string;
+  sourceStart: string;
+  sourceStop: string;
+  destination: string;
+  fareBudget: string;
+}
+
+const DEMO_PRESETS: DemoPreset[] = [
+  {
+    id: 'it-corridor',
+    title: 'IT Corridor Commute',
+    description: 'Peak-hour commute via city interchanges toward OMR belt.',
+    sourceStart: 'central',
+    sourceStop: 'guindy',
+    destination: 'sholinganallur',
+    fareBudget: '₹150',
+  },
+  {
+    id: 'rmk-commute',
+    title: 'R.M.K College Commute',
+    description: 'Daily travel scenario ending at R.M.K CET in Puduvoyal.',
+    sourceStart: 'planetarium',
+    sourceStop: 'redhills',
+    destination: 'rmkcet',
+    fareBudget: '₹100',
+  },
+  {
+    id: 'emergency-reroute',
+    title: 'Emergency Reroute',
+    description: 'Fast reroute model during hazard escalation near north corridor.',
+    sourceStart: 'guindy',
+    sourceStop: 'cmbt',
+    destination: 'redhills',
+    fareBudget: 'Any',
+  },
+];
+
+interface SearchableZoneSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: DemoLocationOption[];
+  placeholder: string;
+}
+
+const SearchableZoneSelect = ({ value, onChange, options, placeholder }: SearchableZoneSelectProps) => {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((option) => option.id === value);
+
+  const grouped = options.reduce<Record<string, DemoLocationOption[]>>((acc, option) => {
+    if (!acc[option.zone]) {
+      acc[option.zone] = [];
+    }
+    acc[option.zone].push(option);
+    return acc;
+  }, {});
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="h-12 w-full justify-between border-border bg-background text-base font-normal"
+        >
+          <span className="truncate text-left">
+            {selected ? `${selected.name} (${selected.zone})` : placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Type quickly to search location..." />
+          <CommandList>
+            <CommandEmpty>No locations found.</CommandEmpty>
+            {ZONE_ORDER.filter((zone) => grouped[zone]?.length).map((zone) => (
+              <CommandGroup key={zone} heading={zone}>
+                {grouped[zone].map((option) => (
+                  <CommandItem
+                    key={option.id}
+                    value={`${option.name} ${option.zone} ${option.id}`}
+                    onSelect={() => {
+                      onChange(option.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check className={cn('mr-2 h-4 w-4', value === option.id ? 'opacity-100' : 'opacity-0')} />
+                    <span className="truncate">{option.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const Index = () => {
+  const GOOGLE_TRANSIT_ENABLED = import.meta.env.VITE_ENABLE_GOOGLE_TRANSIT === 'true';
+  const GTFS_LIVE_ENABLED = import.meta.env.VITE_ENABLE_GTFS_LIVE === 'true';
   const [dropPoints, setDropPoints] = useState<DropPoint[]>([]);
   const [bestDropPoint, setBestDropPoint] = useState<DropPoint | null>(null);
   const [highlightedStopId, setHighlightedStopId] = useState<string>('');
   const [isCalculating, setIsCalculating] = useState(false);
+  const [googleTransitData, setGoogleTransitData] = useState<GoogleTransitRoute | null>(null);
+  const [googleTransitLoading, setGoogleTransitLoading] = useState(false);
+  const [googleTransitError, setGoogleTransitError] = useState<string | null>(null);
+  const [openRouteData, setOpenRouteData] = useState<OpenRouteResponse | null>(null);
+  const [openRouteError, setOpenRouteError] = useState<string | null>(null);
+  const [gtfsLiveData, setGtfsLiveData] = useState<GTFSLiveFeedResponse | null>(null);
+  const [gtfsLiveLoading, setGtfsLiveLoading] = useState(false);
+  const [gtfsLiveError, setGtfsLiveError] = useState<string | null>(null);
+  const [gtfsAutoRefresh, setGtfsAutoRefresh] = useState(true);
+  const [plannerNotice, setPlannerNotice] = useState<string | null>(null);
+  const [backendRouteData, setBackendRouteData] = useState<any | null>(null);
+  const mapStyle: 'dark' = 'dark';
   
   // User Input States
   const [sourceStart, setSourceStart] = useState<string>('');
   const [sourceStop, setSourceStop] = useState<string>('');
   const [destination, setDestination] = useState<string>('');
   const [fareBudget, setFareBudget] = useState<string>('');
+
+  const fetchGoogleTransitPreview = async (origin: Stop, target: Stop) => {
+    if (!GOOGLE_TRANSIT_ENABLED) return;
+
+    setGoogleTransitLoading(true);
+    setGoogleTransitError(null);
+
+    const response = await getGoogleTransitRoute(origin.lat, origin.lng, target.lat, target.lng, 'now');
+
+    if (response.error) {
+      setGoogleTransitData(null);
+      setGoogleTransitError(response.error);
+    } else {
+      setGoogleTransitData(response.data ?? null);
+    }
+
+    setGoogleTransitLoading(false);
+  };
+
+  const fetchOpenRoutePreview = async (origin: Stop, target: Stop) => {
+    const response = await getOpenRoute(origin.lat, origin.lng, target.lat, target.lng);
+    if (response.error) {
+      setOpenRouteData(null);
+      setOpenRouteError(response.error);
+      return;
+    }
+
+    setOpenRouteError(null);
+    setOpenRouteData(response.data ?? null);
+  };
+
+  const fetchGtfsLiveData = async () => {
+    if (!GTFS_LIVE_ENABLED) return;
+
+    setGtfsLiveLoading(true);
+    setGtfsLiveError(null);
+
+    const response = await getGtfsLiveFeed(undefined, 250);
+    if (response.error) {
+      setGtfsLiveData(null);
+      setGtfsLiveError(response.error);
+    } else {
+      setGtfsLiveData(response.data ?? null);
+    }
+
+    setGtfsLiveLoading(false);
+  };
+
+  const fetchBackendRoutePlan = async (origin: Stop, target: Stop) => {
+    const response = await planRoute(origin.lat, origin.lng, target.lat, target.lng, 0.4, 0.3, 0.3);
+    if (response.error) {
+      setBackendRouteData(null);
+      return;
+    }
+
+    setBackendRouteData(response.data ?? null);
+  };
+
+  const parseFareBudgetValue = (budget: string): number | null => {
+    if (!budget || budget.toLowerCase() === 'any') {
+      return null;
+    }
+
+    const digits = budget.replace(/[^0-9]/g, '');
+    if (!digits) {
+      return null;
+    }
+
+    return Number(digits);
+  };
 
   const handleCalculateRoute = () => {
     // Validate inputs
@@ -35,23 +311,144 @@ const Index = () => {
     }
 
     setIsCalculating(true);
+    setGoogleTransitData(null);
+    setGoogleTransitError(null);
+    setOpenRouteData(null);
+    setOpenRouteError(null);
+    setBackendRouteData(null);
+    setPlannerNotice(null);
+
+    const resolvedStart = resolveNetworkStopId(sourceStart);
+    const resolvedSourceStop = resolveNetworkStopId(sourceStop);
+    const resolvedDestination = resolveNetworkStopId(destination);
+
+    if (resolvedStart === resolvedDestination) {
+      alert('Start and destination cannot be the same. Please choose different points.');
+      return;
+    }
     
     // Simulate calculation time for effect
     setTimeout(() => {
-      // Call calculateOptimalRoute with optional parameters (currently uses default data)
-      const points = calculateOptimalRoute();
-      const best = getBestDropPoint(points);
-      setDropPoints(points);
+      const points = calculateOptimalRoute({
+        movingStartId: resolvedStart,
+        movingEndId: resolvedSourceStop,
+        destinationId: resolvedDestination,
+      });
+      const budgetLimit = parseFareBudgetValue(fareBudget);
+      const filteredPoints = budgetLimit === null
+        ? points
+        : points.filter((point) => (point.optimalRoute?.totalFare ?? Number.MAX_SAFE_INTEGER) <= budgetLimit);
+
+      if (filteredPoints.length === 0) {
+        setDropPoints([]);
+        setBestDropPoint(null);
+        setHighlightedStopId('');
+        setPlannerNotice('No route option matches the selected fare budget and route choices. Increase budget or adjust source/destination.');
+        setIsCalculating(false);
+        return;
+      }
+
+      const best = getBestDropPoint(filteredPoints);
+      setDropPoints(filteredPoints);
       setBestDropPoint(best);
       setHighlightedStopId(best?.stop.id || '');
       setIsCalculating(false);
+
+      if (GOOGLE_TRANSIT_ENABLED) {
+        const origin = STOPS[resolvedStart] || best?.stop;
+        const target = STOPS[resolvedDestination] || null;
+        if (origin && target) {
+          void fetchBackendRoutePlan(origin, target);
+          void fetchGoogleTransitPreview(origin, target);
+          void fetchOpenRoutePreview(origin, target);
+        } else {
+          setGoogleTransitError('Google transit preview is available for mapped stops only.');
+          setOpenRouteError('Open route preview is available for mapped stops only.');
+        }
+      } else {
+        const origin = STOPS[resolvedStart] || best?.stop;
+        const target = STOPS[resolvedDestination] || null;
+        if (origin && target) {
+          void fetchBackendRoutePlan(origin, target);
+          void fetchOpenRoutePreview(origin, target);
+        }
+      }
+
+      if (GTFS_LIVE_ENABLED) {
+        void fetchGtfsLiveData();
+      }
     }, 1500);
   };
+
+  useEffect(() => {
+    if (!GTFS_LIVE_ENABLED) return;
+    void fetchGtfsLiveData();
+  }, [GTFS_LIVE_ENABLED]);
+
+  useEffect(() => {
+    if (!GTFS_LIVE_ENABLED) return;
+    if (!gtfsAutoRefresh) return;
+
+    const timer = window.setInterval(() => {
+      void fetchGtfsLiveData();
+    }, 20000);
+
+    return () => window.clearInterval(timer);
+  }, [GTFS_LIVE_ENABLED, gtfsAutoRefresh]);
 
   // Get available stops for dropdowns
   const allStops = Object.values(STOPS);
   const busRouteStops = COLLEGE_BUS_ROUTE.stops;
+  const enrichedSourceOptions: DemoLocationOption[] = Array.from(
+    new Map(
+      [
+        ...busRouteStops.map((s) => ({
+          id: s.id,
+          name: s.name,
+          zone: STOP_ZONE_MAP[s.id] ?? 'Central',
+        })),
+        ...SOURCE_ROUTE_OPTIONS,
+      ].map((opt) => [opt.id, opt])
+    ).values()
+  );
+  const enrichedDestinationOptions: DemoLocationOption[] = Array.from(
+    new Map(
+      [
+        ...allStops.map((s) => ({
+          id: s.id,
+          name: s.name,
+          zone: STOP_ZONE_MAP[s.id] ?? 'Central',
+        })),
+        ...DESTINATION_OPTIONS,
+      ].map((opt) => [opt.id, opt])
+    ).values()
+  );
   const fareBudgetOptions = ['₹50', '₹100', '₹150', '₹200', 'Any'];
+
+  const selectedSourceStop = sourceStart ? STOPS[resolveNetworkStopId(sourceStart)] : undefined;
+  const selectedDestinationStop = destination ? STOPS[resolveNetworkStopId(destination)] : undefined;
+
+  const liveMapStops = useMemo(() => {
+    if (!bestDropPoint?.optimalRoute) {
+      return COLLEGE_BUS_ROUTE.stops;
+    }
+
+    const routeStops = bestDropPoint.optimalRoute.segments.flatMap((segment, index) => {
+      if (index === 0) return [segment.from, segment.to];
+      return [segment.to];
+    });
+
+    const merged = [...COLLEGE_BUS_ROUTE.stops, ...routeStops];
+    const deduped = new Map(merged.map((stop) => [stop.id, stop]));
+    return Array.from(deduped.values());
+  }, [bestDropPoint]);
+
+  const applyDemoPreset = (preset: DemoPreset) => {
+    setSourceStart(preset.sourceStart);
+    setSourceStop(preset.sourceStop);
+    setDestination(preset.destination);
+    setFareBudget(preset.fareBudget);
+  };
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
@@ -76,12 +473,6 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Link to="/diagnostic">
-                <Button className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white border-0 shadow-lg">
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Research Demo
-                </Button>
-              </Link>
               <Link to="/login">
                 <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border-0 shadow-lg">
                   <Smartphone className="w-4 w-4 mr-2" />
@@ -135,198 +526,85 @@ const Index = () => {
           </div>
           
           {/* Icon Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {/* Route Planning */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
+            <motion.button
+              type="button"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ y: -10, scale: 1.05 }}
+              whileTap={{ scale: 0.96 }}
               onClick={() => document.getElementById('route-planning-section')?.scrollIntoView({ behavior: 'smooth' })}
-              className="group relative bg-gradient-to-br from-blue-500/90 via-blue-600/90 to-blue-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 border border-blue-400/20 overflow-hidden"
+              className="group flex flex-col items-center text-center"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <motion.div
-                whileHover={{ rotate: 360 }}
-                transition={{ duration: 0.6 }}
-                className="relative"
-              >
-                <Route className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
-              </motion.div>
-              <h3 className="font-bold text-white mb-1 text-base">Route Planning</h3>
-              <p className="text-xs text-blue-50 opacity-90">Find optimal routes</p>
-              <div className="mt-2 text-[10px] text-blue-100 font-semibold">1,247+ routes calculated</div>
-              <div className="absolute top-3 right-3 w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-            </motion.div>
-
-            {/* Emergency SOS */}
-            <Link to="/safety">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.15 }}
-                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
-                whileTap={{ scale: 0.95 }}
-                className="group relative bg-gradient-to-br from-red-500/90 via-red-600/90 to-red-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-red-500/50 transition-all duration-300 border border-red-400/20 overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <motion.div
-                  animate={{ scale: [1, 1.1, 1] }}
-                  transition={{ repeat: Infinity, duration: 2 }}
-                  className="relative"
-                >
-                  <AlertCircle className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
-                </motion.div>
-                <h3 className="font-bold text-white mb-1 text-base">Emergency SOS</h3>
-                <p className="text-xs text-red-50 opacity-90">Quick help button</p>
-                <div className="mt-2 text-[10px] text-red-100 font-semibold">24/7 Active • 3 patrols nearby</div>
-                <Badge className="absolute top-3 right-3 bg-yellow-400 text-black text-[10px] font-bold animate-pulse">URGENT</Badge>
-              </motion.div>
-            </Link>
+              <div className="relative mb-3">
+                <div className="absolute -inset-2 rounded-full bg-blue-500/30 blur-md opacity-70 transition-opacity group-hover:opacity-100" />
+                <div className="relative h-24 w-24 rounded-full border border-blue-300/30 bg-gradient-to-br from-blue-500 to-blue-700 shadow-xl flex items-center justify-center">
+                  <Route className="h-9 w-9 text-white" />
+                </div>
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">Route Planning</h3>
+              <p className="text-xs text-muted-foreground mt-1">Smart route engine</p>
+            </motion.button>
 
             {/* Hazard Reporting */}
-            <Link to="/safety">
+            <Link to="/safety" className="group flex flex-col items-center text-center">
               <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.2 }}
-                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
-                whileTap={{ scale: 0.95 }}
-                className="group relative bg-gradient-to-br from-orange-500/90 via-orange-600/90 to-orange-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-orange-500/50 transition-all duration-300 border border-orange-400/20 overflow-hidden"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.18 }}
+                whileHover={{ y: -10, scale: 1.05 }}
+                whileTap={{ scale: 0.96 }}
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <motion.div
-                  whileHover={{ rotate: [0, -10, 10, 0] }}
-                  transition={{ duration: 0.5 }}
-                  className="relative"
-                >
-                  <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
-                </motion.div>
-                <h3 className="font-bold text-white mb-1 text-base">Report Hazard</h3>
-                <p className="text-xs text-orange-50 opacity-90">Alert community</p>
-                <div className="mt-2 text-[10px] text-orange-100 font-semibold">89 reports verified today</div>
+                <div className="relative mb-3">
+                  <div className="absolute -inset-2 rounded-full bg-orange-500/30 blur-md opacity-70 transition-opacity group-hover:opacity-100" />
+                  <div className="relative h-24 w-24 rounded-full border border-orange-300/30 bg-gradient-to-br from-orange-500 to-orange-700 shadow-xl flex items-center justify-center">
+                    <AlertTriangle className="h-9 w-9 text-white" />
+                  </div>
+                </div>
+                <h3 className="text-sm font-semibold text-foreground">Report Hazard</h3>
+                <p className="text-xs text-muted-foreground mt-1">Live community alerts</p>
               </motion.div>
             </Link>
 
             {/* Police Patrol */}
-            <Link to="/police-patrol">
+            <Link to="/police-patrol" className="group flex flex-col items-center text-center">
               <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.25 }}
-                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
-                whileTap={{ scale: 0.95 }}
-                className="group relative bg-gradient-to-br from-indigo-500/90 via-indigo-600/90 to-indigo-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-indigo-500/50 transition-all duration-300 border border-indigo-400/20 overflow-hidden"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.26 }}
+                whileHover={{ y: -10, scale: 1.05 }}
+                whileTap={{ scale: 0.96 }}
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <motion.div
-                  whileHover={{ scale: 1.2 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                  className="relative"
-                >
-                  <Shield className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
-                </motion.div>
-                <h3 className="font-bold text-white mb-1 text-base">Police Patrol</h3>
-                <p className="text-xs text-indigo-50 opacity-90">Daily shift entry</p>
-                <div className="mt-2 text-[10px] text-indigo-100 font-semibold">12 active patrols • 8 zones covered</div>
-                <Badge className="absolute top-3 right-3 bg-yellow-400 text-black text-[10px] font-bold">For Police</Badge>
-              </motion.div>
-            </Link>
-
-            {/* Emergency Contacts */}
-            <Link to="/safety">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.3 }}
-                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
-                whileTap={{ scale: 0.95 }}
-                className="group relative bg-gradient-to-br from-green-500/90 via-green-600/90 to-green-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-green-500/50 transition-all duration-300 border border-green-400/20 overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <motion.div
-                  whileHover={{ rotate: [0, 15, -15, 0] }}
-                  transition={{ duration: 0.5 }}
-                  className="relative"
-                >
-                  <Phone className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
-                </motion.div>
-                <h3 className="font-bold text-white mb-1 text-base">Emergency Contacts</h3>
-                <p className="text-xs text-green-50 opacity-90">Manage contacts</p>
-                <div className="mt-2 text-[10px] text-green-100 font-semibold">456 contacts saved</div>
-              </motion.div>
-            </Link>
-
-            {/* Delivery Platform */}
-            <Link to="/mobile">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.45 }}
-                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
-                whileTap={{ scale: 0.95 }}
-                className="group relative bg-gradient-to-br from-pink-500/90 via-pink-600/90 to-pink-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-pink-500/50 transition-all duration-300 border border-pink-400/20 overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <motion.div
-                  animate={{ x: [-2, 2, -2] }}
-                  transition={{ repeat: Infinity, duration: 1.5 }}
-                  className="relative"
-                >
-                  <Car className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
-                </motion.div>
-                <h3 className="font-bold text-white mb-1 text-base">Delivery Riders</h3>
-                <p className="text-xs text-pink-50 opacity-90">For Zomato/Swiggy</p>
-                <div className="mt-2 text-[10px] text-pink-100 font-semibold">234 riders using app</div>
-              </motion.div>
-            </Link>
-
-            {/* Mobile App */}
-            <Link to="/mobile">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.5 }}
-                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
-                whileTap={{ scale: 0.95 }}
-                className="group relative bg-gradient-to-br from-cyan-500/90 via-cyan-600/90 to-cyan-700/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-cyan-500/50 transition-all duration-300 border border-cyan-400/20 overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <motion.div
-                  whileHover={{ rotateZ: 10 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                  className="relative"
-                >
-                  <Smartphone className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
-                </motion.div>
-                <h3 className="font-bold text-white mb-1 text-base">Mobile View</h3>
-                <p className="text-xs text-cyan-50 opacity-90">Optimized UI</p>
-                <div className="mt-2 text-[10px] text-cyan-100 font-semibold">567 active users online</div>
+                <div className="relative mb-3">
+                  <div className="absolute -inset-2 rounded-full bg-indigo-500/30 blur-md opacity-70 transition-opacity group-hover:opacity-100" />
+                  <div className="relative h-24 w-24 rounded-full border border-indigo-300/30 bg-gradient-to-br from-indigo-500 to-indigo-700 shadow-xl flex items-center justify-center">
+                    <Shield className="h-9 w-9 text-white" />
+                  </div>
+                </div>
+                <h3 className="text-sm font-semibold text-foreground">Police Patrol</h3>
+                <p className="text-xs text-muted-foreground mt-1">Coverage control panel</p>
               </motion.div>
             </Link>
 
             {/* Login */}
-            <Link to="/login">
+            <Link to="/login" className="group flex flex-col items-center text-center">
               <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.55 }}
-                whileHover={{ scale: 1.08, y: -8, rotateY: 5 }}
-                whileTap={{ scale: 0.95 }}
-                className="group relative bg-gradient-to-br from-slate-600/90 via-slate-700/90 to-slate-800/90 backdrop-blur-xl rounded-3xl p-8 text-center cursor-pointer shadow-2xl hover:shadow-slate-500/50 transition-all duration-300 border border-slate-400/20 overflow-hidden"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.34 }}
+                whileHover={{ y: -10, scale: 1.05 }}
+                whileTap={{ scale: 0.96 }}
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <motion.div
-                  whileHover={{ rotate: 180 }}
-                  transition={{ duration: 0.5 }}
-                  className="relative"
-                >
-                  <Settings className="w-10 h-10 mx-auto mb-3 text-white drop-shadow-lg" />
-                </motion.div>
-                <h3 className="font-bold text-white mb-1 text-base">Login</h3>
-                <p className="text-xs text-slate-200 opacity-90">User account</p>
-                <div className="mt-2 text-[10px] text-slate-300 font-semibold">Secure OTP authentication</div>
+                <div className="relative mb-3">
+                  <div className="absolute -inset-2 rounded-full bg-slate-500/30 blur-md opacity-70 transition-opacity group-hover:opacity-100" />
+                  <div className="relative h-24 w-24 rounded-full border border-slate-300/30 bg-gradient-to-br from-slate-600 to-slate-800 shadow-xl flex items-center justify-center">
+                    <Settings className="h-9 w-9 text-white" />
+                  </div>
+                </div>
+                <h3 className="text-sm font-semibold text-foreground">Login</h3>
+                <p className="text-xs text-muted-foreground mt-1">Secure access</p>
               </motion.div>
             </Link>
           </div>
@@ -338,6 +616,33 @@ const Index = () => {
             transition={{ delay: 0.8, duration: 0.8 }}
             className="mt-12 h-1 bg-gradient-to-r from-transparent via-primary to-transparent rounded-full"
           />
+        </motion.div>
+      </section>
+
+      <section className="container mx-auto px-6 py-8 max-w-7xl relative z-10">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.7 }}
+          className="relative overflow-hidden rounded-3xl border border-border/40 bg-gradient-to-r from-primary/10 via-secondary/10 to-primary/10 backdrop-blur-xl"
+        >
+          <div className="absolute inset-0 opacity-60 bg-[radial-gradient(circle_at_20%_50%,hsl(var(--primary)/0.24),transparent_40%),radial-gradient(circle_at_80%_50%,hsl(var(--secondary)/0.22),transparent_42%)]" />
+          <div className="relative h-24 flex items-center justify-center px-6">
+            <motion.div
+              initial={{ scaleX: 0.6, opacity: 0.4 }}
+              animate={{ scaleX: 1, opacity: 1 }}
+              transition={{ duration: 1.6, repeat: Infinity, repeatType: 'reverse' }}
+              className="h-1.5 w-full max-w-3xl rounded-full bg-gradient-to-r from-transparent via-primary to-transparent"
+            />
+            <motion.div
+              animate={{ x: ['-42%', '42%'] }}
+              transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+              className="absolute h-3 w-3 rounded-full bg-secondary shadow-[0_0_20px_hsl(var(--secondary)/0.8)]"
+            />
+            <p className="absolute text-xs md:text-sm font-medium text-muted-foreground tracking-wide">
+              Route Flow Demo: Inputs &rarr; Multi-Modal Analysis &rarr; Optimal Drop Point
+            </p>
+          </div>
         </motion.div>
       </section>
 
@@ -371,24 +676,45 @@ const Index = () => {
 
               {/* Input Form */}
               <div className="mt-8 space-y-6 bg-background/80 backdrop-blur-sm rounded-2xl p-6 border border-border/30 shadow-lg">
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold text-foreground">
+                    Professional Demo Presets
+                  </Label>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    {DEMO_PRESETS.map((preset) => (
+                      <Button
+                        key={preset.id}
+                        type="button"
+                        variant="outline"
+                        onClick={() => applyDemoPreset(preset)}
+                        className="h-auto justify-start border-primary/30 bg-primary/5 px-4 py-3 text-left hover:bg-primary/15"
+                      >
+                        <div className="flex items-start gap-3">
+                          {preset.id === 'it-corridor' && <Briefcase className="mt-0.5 h-4 w-4 text-primary" />}
+                          {preset.id === 'rmk-commute' && <GraduationCap className="mt-0.5 h-4 w-4 text-primary" />}
+                          {preset.id === 'emergency-reroute' && <Siren className="mt-0.5 h-4 w-4 text-primary" />}
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{preset.title}</p>
+                            <p className="text-xs text-muted-foreground">{preset.description}</p>
+                          </div>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid md:grid-cols-2 gap-6">
                   {/* Source Start */}
                   <div className="space-y-2">
                     <Label htmlFor="sourceStart" className="text-base font-semibold text-foreground">
                       Source Start (Moving Vehicle Route)
                     </Label>
-                    <Select value={sourceStart} onValueChange={setSourceStart}>
-                      <SelectTrigger className="h-12 text-base bg-background border-border">
-                        <SelectValue placeholder="Select starting point..." />
-                      </SelectTrigger>
-                      <SelectContent className="bg-background">
-                        {busRouteStops.map((stop) => (
-                          <SelectItem key={stop.id} value={stop.id}>
-                            {stop.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableZoneSelect
+                      value={sourceStart}
+                      onChange={setSourceStart}
+                      options={enrichedSourceOptions}
+                      placeholder="Select starting point..."
+                    />
                   </div>
 
                   {/* Source Stop */}
@@ -396,18 +722,12 @@ const Index = () => {
                     <Label htmlFor="sourceStop" className="text-base font-semibold text-foreground">
                       Source Stop (End of Vehicle Route)
                     </Label>
-                    <Select value={sourceStop} onValueChange={setSourceStop}>
-                      <SelectTrigger className="h-12 text-base bg-background border-border">
-                        <SelectValue placeholder="Select ending point..." />
-                      </SelectTrigger>
-                      <SelectContent className="bg-background">
-                        {busRouteStops.map((stop) => (
-                          <SelectItem key={stop.id} value={stop.id}>
-                            {stop.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableZoneSelect
+                      value={sourceStop}
+                      onChange={setSourceStop}
+                      options={enrichedSourceOptions}
+                      placeholder="Select ending point..."
+                    />
                   </div>
 
                   {/* Destination */}
@@ -415,18 +735,12 @@ const Index = () => {
                     <Label htmlFor="destination" className="text-base font-semibold text-foreground">
                       Final Destination
                     </Label>
-                    <Select value={destination} onValueChange={setDestination}>
-                      <SelectTrigger className="h-12 text-base bg-background border-border">
-                        <SelectValue placeholder="Where do you want to go?" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-background">
-                        {allStops.map((stop) => (
-                          <SelectItem key={stop.id} value={stop.id}>
-                            {stop.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableZoneSelect
+                      value={destination}
+                      onChange={setDestination}
+                      options={enrichedDestinationOptions}
+                      placeholder="Where do you want to go?"
+                    />
                   </div>
 
                   {/* Fare Budget */}
@@ -499,6 +813,12 @@ const Index = () => {
         )}
 
         {/* Results */}
+        {!isCalculating && plannerNotice && (
+          <div className="mb-6 rounded-xl border border-orange-300 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            {plannerNotice}
+          </div>
+        )}
+
         {!isCalculating && dropPoints.length > 0 && (
           <Tabs defaultValue="recommendation" className="space-y-8">
             <TabsList className="grid w-full grid-cols-3 max-w-2xl mx-auto bg-card/50 backdrop-blur-xl border border-border/50 p-1.5 h-14 rounded-2xl">
@@ -520,16 +840,10 @@ const Index = () => {
               />
               
               {/* Police Patrol Information */}
-              {bestDropPoint && bestDropPoint.stop && bestDropPoint.stop.coordinates && (
+              {(selectedSourceStop || selectedDestinationStop) && (
                 <PolicePatrolInfo
-                  sourceLocation={{ 
-                    lat: bestDropPoint.stop.coordinates.lat, 
-                    lng: bestDropPoint.stop.coordinates.lng 
-                  }}
-                  destinationLocation={{ 
-                    lat: bestDropPoint.stop.coordinates.lat, 
-                    lng: bestDropPoint.stop.coordinates.lng 
-                  }}
+                  sourceLocation={selectedSourceStop ? { lat: selectedSourceStop.lat, lng: selectedSourceStop.lng } : undefined}
+                  destinationLocation={selectedDestinationStop ? { lat: selectedDestinationStop.lat, lng: selectedDestinationStop.lng } : undefined}
                 />
               )}
             </TabsContent>
@@ -542,7 +856,7 @@ const Index = () => {
                     <h3 className="text-2xl font-bold text-foreground">Complete Journey Map</h3>
                   </div>
                   <p className="text-muted-foreground">
-                    Branching route from college bus to your final destination
+                    Branching route from the R.M.K CET shuttle to your final destination
                   </p>
                 </div>
                 <div className="p-8">
@@ -550,6 +864,252 @@ const Index = () => {
                     highlightedStopId={highlightedStopId}
                     optimalRoute={bestDropPoint?.optimalRoute?.segments}
                   />
+                </div>
+              </div>
+
+              <div className="rounded-3xl bg-card/50 backdrop-blur-xl border border-border/50 shadow-elevated overflow-hidden">
+                <div className="p-8 bg-gradient-to-br from-primary/10 to-transparent">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                      <h3 className="text-2xl font-bold text-foreground">Live Transit Command Center</h3>
+                      <p className="text-muted-foreground mt-1">
+                        Route-level map with service legs, ETA windows, and fare visibility for panel presentation.
+                      </p>
+                    </div>
+                    <Badge className="bg-indigo-500/20 text-indigo-700 border border-indigo-500/30">
+                      Dark Map Mode: Active
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="p-8 space-y-6">
+                  <InteractiveMap
+                    stops={liveMapStops}
+                    route={bestDropPoint?.optimalRoute ?? undefined}
+                    optimalDropPoint={bestDropPoint?.stop}
+                    externalPolyline={(gtfsLiveData?.route_shape.length ?? 0) > 1
+                      ? gtfsLiveData?.route_shape.map((p) => [p.lat, p.lon])
+                      : openRouteData?.geometry.map((p) => [p.lat, p.lon])}
+                    liveVehicles={gtfsLiveData?.vehicles ?? []}
+                    mapStyle={mapStyle}
+                  />
+
+                  {GTFS_LIVE_ENABLED ? (
+                    <div className="rounded-2xl border border-border/50 bg-background/70 p-5">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <h4 className="text-lg font-semibold text-foreground">Real-Time GTFS Vehicle Tracking</h4>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={() => setGtfsAutoRefresh((v) => !v)}>
+                            {gtfsAutoRefresh ? 'Auto Refresh: ON' : 'Auto Refresh: OFF'}
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => void fetchGtfsLiveData()}>
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Refresh Now
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-3 mt-4">
+                        <div className="rounded-xl border border-border/40 p-3">
+                          <p className="text-xs text-muted-foreground">Live Vehicles</p>
+                          <p className="font-semibold">{gtfsLiveData?.vehicles.length ?? 0}</p>
+                        </div>
+                        <div className="rounded-xl border border-border/40 p-3">
+                          <p className="text-xs text-muted-foreground">Feed Provider</p>
+                          <p className="font-semibold uppercase">{gtfsLiveData?.provider ?? 'GTFS-RT'}</p>
+                        </div>
+                        <div className="rounded-xl border border-border/40 p-3">
+                          <p className="text-xs text-muted-foreground">Route Shape Points</p>
+                          <p className="font-semibold">{gtfsLiveData?.route_shape.length ?? 0}</p>
+                        </div>
+                      </div>
+
+                      {gtfsLiveLoading && <p className="text-sm text-muted-foreground mt-3">Syncing GTFS-RT feed...</p>}
+                      {gtfsLiveError && <p className="text-sm text-destructive mt-3">{gtfsLiveError}</p>}
+
+                      {gtfsLiveData && gtfsLiveData.vehicles.length > 0 && (
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 mt-4">
+                          {gtfsLiveData.vehicles.slice(0, 12).map((vehicle, idx) => (
+                            <div key={`${vehicle.entity_id}-${idx}`} className="rounded-xl border border-border/40 p-3">
+                              <div className="flex items-center justify-between">
+                                <p className="font-semibold">{vehicle.route_short_name || 'Route N/A'}</p>
+                                <Badge variant="outline">{vehicle.mode.toUpperCase()}</Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {vehicle.vehicle_label || vehicle.vehicle_id || vehicle.trip_id || 'Vehicle'}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {vehicle.lat}, {vehicle.lon}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-border/50 bg-background/70 p-5">
+                      <h4 className="text-lg font-semibold text-foreground">Real-Time GTFS Vehicle Tracking</h4>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Live vehicle feed demo controls are hidden for presentation mode until GTFS endpoint setup is finalized.
+                      </p>
+                    </div>
+                  )}
+
+                  {backendRouteData && (
+                    <div className="rounded-2xl border border-border/50 bg-background/70 p-5">
+                      <h4 className="text-lg font-semibold text-foreground">Backend Route Engine (Live)</h4>
+                      <div className="grid gap-3 md:grid-cols-4 mt-3">
+                        <div className="rounded-xl border border-border/40 p-3">
+                          <p className="text-xs text-muted-foreground">Distance</p>
+                          <p className="font-semibold">{backendRouteData.total_distance} km</p>
+                        </div>
+                        <div className="rounded-xl border border-border/40 p-3">
+                          <p className="text-xs text-muted-foreground">Travel Time</p>
+                          <p className="font-semibold">{backendRouteData.total_time} min</p>
+                        </div>
+                        <div className="rounded-xl border border-border/40 p-3">
+                          <p className="text-xs text-muted-foreground">Fare</p>
+                          <p className="font-semibold">₹{backendRouteData.total_fare}</p>
+                        </div>
+                        <div className="rounded-xl border border-border/40 p-3">
+                          <p className="text-xs text-muted-foreground">Avg Safety</p>
+                          <p className="font-semibold">{backendRouteData.average_safety_score}/10</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-2xl border border-border/50 bg-background/70 p-5">
+                    <h4 className="text-lg font-semibold text-foreground">Open Map Stack Strategy</h4>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Frontend alternatives reviewed: FacilMap, Mapcarta, and OpenStreetMap ecosystem. For production-safe API usage,
+                      this platform uses OpenStreetMap-backed services (OSRM routing and Nominatim geocoding) and optional Google Transit enrichment.
+                    </p>
+                    <div className="grid gap-3 md:grid-cols-3 mt-4">
+                      <div className="rounded-xl border border-border/40 p-3">
+                        <p className="font-semibold text-sm">FacilMap</p>
+                        <p className="text-xs text-muted-foreground mt-1">Great frontend UX, but not positioned as your dedicated API backend.</p>
+                      </div>
+                      <div className="rounded-xl border border-border/40 p-3">
+                        <p className="font-semibold text-sm">Mapcarta</p>
+                        <p className="text-xs text-muted-foreground mt-1">Consumer map experience, no clear general-purpose public API for app backend integration.</p>
+                      </div>
+                      <div className="rounded-xl border border-border/40 p-3">
+                        <p className="font-semibold text-sm">OpenStreetMap Stack</p>
+                        <p className="text-xs text-muted-foreground mt-1">Open data + proven APIs via Nominatim/OSRM, ideal for your project defense.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-border/50 bg-background/70 p-5">
+                    <h4 className="text-lg font-semibold text-foreground">Open Route Intelligence</h4>
+                    {openRouteError && <p className="text-sm text-destructive mt-2">{openRouteError}</p>}
+                    {openRouteData && (
+                      <div className="grid gap-3 md:grid-cols-3 mt-3">
+                        <div className="rounded-xl border border-border/40 p-3">
+                          <p className="text-xs text-muted-foreground">Provider</p>
+                          <p className="font-semibold uppercase">{openRouteData.provider}</p>
+                        </div>
+                        <div className="rounded-xl border border-border/40 p-3">
+                          <p className="text-xs text-muted-foreground">Distance</p>
+                          <p className="font-semibold">{openRouteData.distance_km} km</p>
+                        </div>
+                        <div className="rounded-xl border border-border/40 p-3">
+                          <p className="text-xs text-muted-foreground">Duration</p>
+                          <p className="font-semibold">{openRouteData.duration_min} min</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {GOOGLE_TRANSIT_ENABLED && (
+                    <div className="rounded-2xl border border-border/50 bg-background/70 p-5">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <h4 className="text-lg font-semibold text-foreground">Google Transit Intelligence</h4>
+                        {googleTransitLoading && <Badge variant="outline">Syncing live feed...</Badge>}
+                      </div>
+
+                      {googleTransitError && (
+                        <p className="text-sm text-destructive mt-2">{googleTransitError}</p>
+                      )}
+
+                      {!googleTransitLoading && googleTransitData && (
+                        <div className="mt-4 space-y-4">
+                          <div className="grid gap-3 md:grid-cols-4">
+                            <div className="rounded-xl border border-border/40 p-3">
+                              <p className="text-xs text-muted-foreground">Duration</p>
+                              <p className="font-semibold">{googleTransitData.duration_text ?? 'N/A'}</p>
+                            </div>
+                            <div className="rounded-xl border border-border/40 p-3">
+                              <p className="text-xs text-muted-foreground">Distance</p>
+                              <p className="font-semibold">{googleTransitData.distance_text ?? 'N/A'}</p>
+                            </div>
+                            <div className="rounded-xl border border-border/40 p-3">
+                              <p className="text-xs text-muted-foreground">Estimated Fare</p>
+                              <p className="font-semibold">{googleTransitData.fare_text ?? 'Provider not available'}</p>
+                            </div>
+                            <div className="rounded-xl border border-border/40 p-3">
+                              <p className="text-xs text-muted-foreground">Provider</p>
+                              <p className="font-semibold uppercase">{googleTransitData.provider}</p>
+                            </div>
+                          </div>
+
+                          {googleTransitData.steps.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-foreground">Transit Legs and Service Numbers</p>
+                              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                {googleTransitData.steps.map((step, idx) => (
+                                  <div key={`${step.line_short_name || step.line_name || step.travel_mode}-${idx}`} className="rounded-xl border border-border/40 p-3">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <Badge variant="outline">{step.travel_mode}</Badge>
+                                      <span className="text-xs text-muted-foreground">{step.vehicle_type || 'N/A'}</span>
+                                    </div>
+                                    <p className="text-sm font-semibold">{step.line_short_name || step.line_name || 'Walking / Transfer'}</p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {step.departure_stop && step.arrival_stop
+                                        ? `${step.departure_stop} to ${step.arrival_stop}`
+                                        : 'Interchange leg'}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {step.duration_text || 'N/A'} {step.num_stops ? `• ${step.num_stops} stops` : ''}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {bestDropPoint?.optimalRoute && bestDropPoint.optimalRoute.segments.length > 0 && (
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      {bestDropPoint.optimalRoute.segments.map((segment, index) => (
+                        <div
+                          key={`${segment.routeName}-${index}`}
+                          className="rounded-2xl border border-border/50 bg-background/70 p-4 shadow-sm"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <Badge variant="outline">Leg {index + 1}</Badge>
+                            <span className="text-xs text-muted-foreground uppercase tracking-wide">{segment.mode}</span>
+                          </div>
+                          <p className="font-semibold text-foreground">{segment.routeName}</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {segment.from.name} to {segment.to.name}
+                          </p>
+                          <div className="mt-3 flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">ETA</span>
+                            <span className="font-semibold text-foreground">{segment.time + (segment.waitTime ?? 0)} min</span>
+                          </div>
+                          <div className="mt-1 flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Fare</span>
+                            <span className="font-semibold text-foreground">₹{segment.fare}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </TabsContent>
@@ -578,7 +1138,7 @@ const Index = () => {
                     </div>
                     <h4 className="text-lg font-semibold text-foreground mb-2">Path Analysis</h4>
                     <p className="text-muted-foreground text-sm">
-                      Evaluates each stop along the college bus route as a potential drop point
+                      Evaluates each stop along the R.M.K CET shuttle route as a potential drop point
                     </p>
                   </div>
                   <div className="p-6 rounded-2xl bg-gradient-to-br from-secondary/10 to-transparent border border-secondary/20">

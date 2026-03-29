@@ -4,6 +4,7 @@ import { Icon, LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Stop, RouteOption } from '../data/transportData';
 import { motion } from 'framer-motion';
+import { GTFSLiveVehicle } from '../utils/apiService';
 
 // Fix for default markers
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -69,6 +70,9 @@ interface InteractiveMapProps {
   stops: Stop[];
   route?: RouteOption;
   optimalDropPoint?: Stop;
+  externalPolyline?: LatLngExpression[];
+  liveVehicles?: GTFSLiveVehicle[];
+  mapStyle?: 'dark' | 'satellite';
   className?: string;
 }
 
@@ -124,7 +128,15 @@ const AnimatedVehicle = ({ position, type }: { position: LatLngExpression; type:
   );
 };
 
-export const InteractiveMap = ({ stops, route, optimalDropPoint, className = '' }: InteractiveMapProps) => {
+export const InteractiveMap = ({
+  stops,
+  route,
+  optimalDropPoint,
+  externalPolyline,
+  liveVehicles = [],
+  mapStyle = 'dark',
+  className = '',
+}: InteractiveMapProps) => {
   const center: LatLngExpression = stops.length > 0 
     ? [stops[0].lat, stops[0].lng] 
     : [13.0827, 80.2707]; // Chennai Central default
@@ -139,6 +151,22 @@ export const InteractiveMap = ({ stops, route, optimalDropPoint, className = '' 
       case 'train': return trainIcon;
       default: return DefaultIcon;
     }
+  };
+
+  const tileConfig = mapStyle === 'satellite'
+    ? {
+        attribution: '&copy; Esri, Maxar, Earthstar Geographics',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      }
+    : {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      };
+
+  const getLiveVehicleIcon = (mode: string) => {
+    if (mode === 'train') return trainIcon;
+    if (mode === 'metro' || mode === 'subway') return metroIcon;
+    return busIcon;
   };
 
   // Create polyline from route segments
@@ -176,9 +204,16 @@ export const InteractiveMap = ({ stops, route, optimalDropPoint, className = '' 
         scrollWheelZoom={true}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={tileConfig.attribution}
+          url={tileConfig.url}
         />
+
+        {mapStyle === 'satellite' && (
+          <TileLayer
+            attribution='&copy; Esri labels'
+            url='https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'
+          />
+        )}
         
         <FitBounds stops={stops} />
         
@@ -196,6 +231,17 @@ export const InteractiveMap = ({ stops, route, optimalDropPoint, className = '' 
             }}
           />
         ))}
+
+        {externalPolyline && externalPolyline.length > 1 && (
+          <Polyline
+            positions={externalPolyline}
+            pathOptions={{
+              color: '#ef4444',
+              weight: 4,
+              opacity: 0.85,
+            }}
+          />
+        )}
         
         {/* Stop markers */}
         {stops.map((stop, idx) => (
@@ -221,8 +267,27 @@ export const InteractiveMap = ({ stops, route, optimalDropPoint, className = '' 
           </Marker>
         ))}
         
-        {/* Animated vehicle (simulated live tracking) */}
-        {stops.length > 1 && (
+        {/* GTFS real-time vehicle markers */}
+        {liveVehicles.map((vehicle, index) => (
+          <Marker
+            key={`${vehicle.entity_id || vehicle.vehicle_id || 'vehicle'}-${index}`}
+            position={[vehicle.lat, vehicle.lon]}
+            icon={getLiveVehicleIcon(vehicle.mode)}
+          >
+            <Popup>
+              <div className="text-center">
+                <p className="font-bold">{vehicle.route_short_name || 'Transit Vehicle'}</p>
+                <p className="text-xs text-muted-foreground">{vehicle.vehicle_label || vehicle.trip_id || 'Live position'}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {vehicle.mode.toUpperCase()} {vehicle.speed ? `• ${Math.round(vehicle.speed * 3.6)} km/h` : ''}
+                </p>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+
+        {/* Simulated marker fallback when GTFS feed is unavailable */}
+        {liveVehicles.length === 0 && stops.length > 1 && (
           <AnimatedVehicle 
             position={[stops[Math.floor(stops.length / 2)].lat, stops[Math.floor(stops.length / 2)].lng]}
             type={stops[0].type}

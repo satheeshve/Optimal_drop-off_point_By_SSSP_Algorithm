@@ -5,12 +5,10 @@ Implements crowdsourced hazard reporting as per paper Section III.E
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import and_
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
-from geoalchemy2.shape import from_shape, to_shape
-from shapely.geometry import Point
 from geopy.distance import geodesic
 
 from database import get_db, HazardReport, User, HazardCategory, HazardSeverity, ReportStatus
@@ -100,23 +98,20 @@ def check_duplicate_report(db: Session, latitude: float, longitude: float, categ
     As per paper Section IV - duplicate detection
     """
     time_threshold = datetime.utcnow() - timedelta(minutes=settings.DUPLICATE_DETECTION_TIME_MIN)
-    point = from_shape(Point(longitude, latitude), srid=4326)
-    
-    # Query for nearby recent reports
-    similar_reports = db.query(HazardReport).filter(
+
+    recent_reports = db.query(HazardReport).filter(
         and_(
             HazardReport.category == category,
-            HazardReport.created_at >= time_threshold,
-            func.ST_DWithin(
-                HazardReport.location,
-                point,
-                settings.DUPLICATE_DETECTION_RADIUS_M,
-                True
-            )
+            HazardReport.created_at >= time_threshold
         )
     ).all()
-    
-    return len(similar_reports) > 0
+
+    for existing in recent_reports:
+        distance_m = geodesic((latitude, longitude), (existing.latitude, existing.longitude)).meters
+        if distance_m <= settings.DUPLICATE_DETECTION_RADIUS_M:
+            return True
+
+    return False
 
 def check_rate_limit(db: Session, user_id: int) -> bool:
     """
@@ -174,13 +169,11 @@ def create_hazard_report(report: HazardReportCreate, db: Session = Depends(get_d
             detail="Similar report already exists within 50m in last 30 minutes"
         )
     
-    # Create point geometry
-    point = from_shape(Point(report.longitude, report.latitude), srid=4326)
-    
     # Create hazard report
     db_report = HazardReport(
         user_id=report.user_id,
-        location=point,
+        latitude=report.latitude,
+        longitude=report.longitude,
         category=report.category,
         severity=report.severity,
         title=report.title,
@@ -204,13 +197,11 @@ def create_hazard_report(report: HazardReportCreate, db: Session = Depends(get_d
     db_report.current_impact_score = calculate_hazard_impact(db_report)
     db.commit()
     
-    # Convert to response format
-    shape = to_shape(db_report.location)
     response = HazardReportResponse(
         id=db_report.id,
         user_id=db_report.user_id,
-        latitude=shape.y,
-        longitude=shape.x,
+        latitude=db_report.latitude,
+        longitude=db_report.longitude,
         category=db_report.category.value,
         severity=db_report.severity.value,
         title=db_report.title,
@@ -236,33 +227,26 @@ def get_nearby_hazards(
     Get hazards within radius (default 2km as per paper)
     Only returns verified hazards unless specified
     """
-    point = from_shape(Point(longitude, latitude), srid=4326)
-    radius_meters = radius_km * 1000
-    
-    query = db.query(HazardReport).filter(
-        func.ST_DWithin(
-            HazardReport.location,
-            point,
-            radius_meters,
-            True
-        )
-    )
+    query = db.query(HazardReport)
     
     if status_filter:
         query = query.filter(HazardReport.status == status_filter)
     
-    reports = query.order_by(HazardReport.created_at.desc()).all()
+    candidate_reports = query.order_by(HazardReport.created_at.desc()).all()
     
     # Update impact scores
     result = []
-    for report in reports:
+    for report in candidate_reports:
+        distance_km = geodesic((latitude, longitude), (report.latitude, report.longitude)).km
+        if distance_km > radius_km:
+            continue
+
         report.current_impact_score = calculate_hazard_impact(report)
-        shape = to_shape(report.location)
         result.append(HazardReportResponse(
             id=report.id,
             user_id=report.user_id,
-            latitude=shape.y,
-            longitude=shape.x,
+            latitude=report.latitude,
+            longitude=report.longitude,
             category=report.category.value,
             severity=report.severity.value,
             title=report.title,

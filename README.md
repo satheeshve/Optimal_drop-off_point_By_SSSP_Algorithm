@@ -1,71 +1,101 @@
-﻿# Commuter Genius
+﻿# Optimal Drop-off Point by SSSP
 
-Safety-first public transport planning platform with route optimization, hazard reporting, emergency SOS, and admin moderation.
+Safety-first public transport planning platform with shortest-path route recommendations, safety scoring, hazard reporting, emergency workflows, and admin moderation.
+
+## Features
+
+- Shortest-path based route recommendation engine (SSSP-focused)
+- Safety-aware route scoring and hazard impact modeling
+- Police patrol visibility and management views
+- Emergency/SOS support flow
+- Admin dashboard for hazard verification and control
+- GTFS/GTFS-RT transit integration support
 
 ## Tech Stack
-- Frontend: React + TypeScript + Vite + Tailwind
-- Backend: FastAPI + Python + SQLAlchemy
-- Database: PostgreSQL (recommended)
-- Optional infra: Docker and Docker Compose
+
+- Frontend: React, TypeScript, Vite, Tailwind CSS
+- Backend: FastAPI, Python, SQLAlchemy
+- Database: SQLite (default) or PostgreSQL (production)
+- Deployment: Docker, Docker Compose, Nginx
 
 ## Repository Structure
 
 ```text
-commuter-genius-main/
-  src/                    Frontend app source
-  backend/                FastAPI backend source
-    routers/              API route modules
-    requirements.txt      Backend dependencies
-    main.py               FastAPI entrypoint
-  docker/                 Nginx and container configs
-  public/                 Static frontend assets
-  Dockerfile              Container image build
-  docker-compose.yml      Local multi-service orchestration
-  package.json            Frontend scripts and dependencies
+.
+|- src/                 Frontend source
+|- backend/             FastAPI application
+|  |- routers/          Backend API route modules
+|  |- services/         Backend service modules
+|  |- requirements.txt  Python dependencies
+|  `- main.py           API entrypoint
+|- docker/              Container and reverse-proxy config
+|- public/              Static assets
+|- package.json         Frontend dependencies and scripts
+`- docker-compose.yml   Local container orchestration
 ```
 
-## Quick Start (Local)
+## Prerequisites
 
-### 1. Frontend
+- Node.js 18+
+- Python 3.10+
+- npm
+
+## Local Development
+
+### 1. Install Frontend Dependencies
 
 ```powershell
 npm install --legacy-peer-deps
-npm run dev
 ```
 
-### 2. Backend
+### 2. Install Backend Dependencies
 
 ```powershell
 cd backend
-c:/Users/User/Downloads/Optimal_drop-off_point_By_SSSP/venv/Scripts/python.exe -m pip install -r requirements.txt
-c:/Users/User/Downloads/Optimal_drop-off_point_By_SSSP/venv/Scripts/python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+python -m venv venv
+venv\Scripts\python.exe -m pip install -r requirements.txt
+cd ..
 ```
 
-### 3. Build for Production
+### 3. Start Backend
+
+```powershell
+cd backend
+venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 4. Start Frontend
+
+```powershell
+npm run dev
+```
+
+Frontend: http://localhost:8080  
+Backend API: http://localhost:8000  
+API docs: http://localhost:8000/api/docs
+
+## Environment Configuration
+
+- Frontend template: `.env.production`
+- Backend template: `backend/.env.example` and `backend/.env.production`
+- Keep real secrets in local `.env` files only (excluded by `.gitignore`)
+
+## Build and Deployment
+
+### Frontend Production Build
 
 ```powershell
 npm run build
 ```
 
-## Deployment Paths
-
-### Option A: Docker Compose
+### Docker Compose
 
 ```powershell
 docker compose up --build -d
 ```
 
-### Option B: Manual
-1. Build frontend with `npm run build`
-2. Serve `dist/` via Nginx or static hosting
-3. Run backend via Uvicorn or Gunicorn
-4. Set environment variables for DB and secrets
+## Quality and Maintenance
 
-## Verified Today
-- Frontend production build completed successfully.
-- Backend import smoke check passed (`import main`).
-- Python 3.13 dependency blocker resolved by pinning `aiohttp==3.12.15`.
-
-## Notes
-- Keep local `.env` files out of Git.
-- Use `npm install --legacy-peer-deps` in this repo due React/Leaflet peer constraints.
+- Lint frontend: `npm run lint`
+- Prefer one JS package manager in this repo (`npm`)
+- Keep generated artifacts (`dist`, `node_modules`, virtual environments) out of source control

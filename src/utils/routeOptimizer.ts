@@ -9,9 +9,18 @@ import {
   COLLEGE_BUS_ROUTE,
   HOME,
   WEIGHTS,
+  CommuterProfile,
   calculateCrimeScore,
-  getPolicePatrolsOnRoute
+  getPolicePatrolsOnRoute,
+  getEffectiveFare
 } from '@/data/transportData';
+
+interface RoutePlanInput {
+  movingStartId?: string;
+  movingEndId?: string;
+  destinationId?: string;
+  commuterProfile?: CommuterProfile;
+}
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -167,6 +176,7 @@ function enhancedSSSP(
   graph: Map<string, GraphNode>,
   start: Stop,
   end: Stop,
+  commuterProfile: CommuterProfile = { gender: 'male' },
   maxTransfers: number = 3
 ): RouteOption[] {
   const pq = new PriorityQueue<PathState>();
@@ -218,13 +228,16 @@ function enhancedSSSP(
     for (const edge of node.edges) {
       const isTransfer = current.lastRoute !== null && 
                         current.lastRoute.id !== edge.route.id;
+      const isFirstBoarding = current.lastRoute === null;
+      const isNewBoarding = isFirstBoarding || isTransfer;
       const newTransfers = current.transfers + (isTransfer ? 1 : 0);
       
       if (newTransfers > maxTransfers) continue;
 
       const waitTime = isTransfer ? 10 : 5;
       const newTime = current.totalTime + edge.time + waitTime;
-      const newFare = current.totalFare + (isTransfer ? edge.fare : 0);
+      const boardedFare = getEffectiveFare(edge.route, commuterProfile);
+      const newFare = current.totalFare + (isNewBoarding ? boardedFare : 0);
 
       const segment: RouteSegment = {
         from: current.stop,
@@ -232,7 +245,7 @@ function enhancedSSSP(
         mode: edge.route.type,
         routeName: edge.route.name,
         time: edge.time,
-        fare: isTransfer ? edge.fare : 0,
+        fare: isNewBoarding ? boardedFare : 0,
         waitTime
       };
 
@@ -264,39 +277,47 @@ function enhancedSSSP(
 // FIND ROUTES FROM STOP (Using Enhanced SSSP)
 // ═══════════════════════════════════════════════════════════════
 
-function findRoutesFromStop(fromStop: Stop): RouteOption[] {
+function findRoutesFromStop(
+  fromStop: Stop,
+  destination: Stop,
+  commuterProfile: CommuterProfile = { gender: 'male' }
+): RouteOption[] {
   const graph = buildTransportGraph();
-  const routes = enhancedSSSP(graph, fromStop, HOME);
+  const routes = enhancedSSSP(graph, fromStop, destination, commuterProfile);
   
   // If no routes found using graph, try direct connection heuristics
   if (routes.length === 0) {
-    return findRoutesHeuristic(fromStop);
+    return findRoutesHeuristic(fromStop, destination, commuterProfile);
   }
   
   return routes;
 }
 
 // Fallback heuristic for direct routes
-function findRoutesHeuristic(fromStop: Stop): RouteOption[] {
+function findRoutesHeuristic(
+  fromStop: Stop,
+  destination: Stop,
+  commuterProfile: CommuterProfile = { gender: 'male' }
+): RouteOption[] {
   const routes: RouteOption[] = [];
 
   // Direct routes
   TRANSPORT_ROUTES.forEach(route => {
     const fromIndex = route.stops.findIndex(s => s.id === fromStop.id);
-    const toIndex = route.stops.findIndex(s => s.id === HOME.id);
+    const toIndex = route.stops.findIndex(s => s.id === destination.id);
 
     if (fromIndex !== -1 && toIndex !== -1 && toIndex > fromIndex) {
       const segment: RouteSegment = {
         from: fromStop,
-        to: HOME,
+        to: destination,
         mode: route.type,
         routeName: route.name,
         time: route.avgTime,
-        fare: route.fare,
+        fare: getEffectiveFare(route, commuterProfile),
         waitTime: 5
       };
 
-      const routeStops = [fromStop, HOME];
+      const routeStops = [fromStop, destination];
       const option: RouteOption = {
         totalTime: segment.time + (segment.waitTime || 0),
         totalFare: segment.fare,
@@ -325,7 +346,7 @@ function findRoutesHeuristic(fromStop: Stop): RouteOption[] {
         if (route1.id === route2.id) return;
 
         const fromIndex2 = route2.stops.findIndex(s => s.id === transferStop.id);
-        const toIndex2 = route2.stops.findIndex(s => s.id === HOME.id);
+        const toIndex2 = route2.stops.findIndex(s => s.id === destination.id);
 
         if (fromIndex2 !== -1 && toIndex2 !== -1 && toIndex2 > fromIndex2) {
           const segment1: RouteSegment = {
@@ -334,21 +355,21 @@ function findRoutesHeuristic(fromStop: Stop): RouteOption[] {
             mode: route1.type,
             routeName: route1.name,
             time: Math.round(route1.avgTime * 0.4),
-            fare: Math.round(route1.fare * 0.6),
+            fare: Math.round(getEffectiveFare(route1, commuterProfile) * 0.6),
             waitTime: 5
           };
 
           const segment2: RouteSegment = {
             from: transferStop,
-            to: HOME,
+            to: destination,
             mode: route2.type,
             routeName: route2.name,
             time: route2.avgTime,
-            fare: route2.fare,
+            fare: getEffectiveFare(route2, commuterProfile),
             waitTime: 10
           };
 
-          const routeStops = [fromStop, transferStop, HOME];
+          const routeStops = [fromStop, transferStop, destination];
           const option: RouteOption = {
             totalTime: segment1.time + segment2.time + (segment1.waitTime || 0) + (segment2.waitTime || 0),
             totalFare: segment1.fare + segment2.fare,
@@ -374,17 +395,57 @@ function findRoutesHeuristic(fromStop: Stop): RouteOption[] {
 // CALCULATE BUS TIME TO STOP
 // ═══════════════════════════════════════════════════════════════
 
-function calculateBusTimeToStop(stop: Stop): number {
-  const stopIndex = COLLEGE_BUS_ROUTE.stops.findIndex(s => s.id === stop.id);
-  if (stopIndex === -1) return 0;
-  return stopIndex * 25;
+function calculateBusTimeToStop(stopsOnMovingRoute: Stop[], stop: Stop, totalRouteTime: number): number {
+  const stopIndex = stopsOnMovingRoute.findIndex(s => s.id === stop.id);
+  if (stopIndex <= 0) return 0;
+  const hopCount = Math.max(stopsOnMovingRoute.length - 1, 1);
+  return Math.round((totalRouteTime / hopCount) * stopIndex);
+}
+
+function getMovingRouteStops(start: Stop, end: Stop): { stops: Stop[]; avgTime: number } {
+  const directRoute = TRANSPORT_ROUTES.find(route => {
+    const startIndex = route.stops.findIndex(s => s.id === start.id);
+    const endIndex = route.stops.findIndex(s => s.id === end.id);
+    return startIndex !== -1 && endIndex !== -1 && endIndex > startIndex;
+  });
+
+  if (directRoute) {
+    const startIndex = directRoute.stops.findIndex(s => s.id === start.id);
+    const endIndex = directRoute.stops.findIndex(s => s.id === end.id);
+    return {
+      stops: directRoute.stops.slice(startIndex, endIndex + 1),
+      avgTime: directRoute.avgTime,
+    };
+  }
+
+  const collegeStart = COLLEGE_BUS_ROUTE.stops.findIndex(s => s.id === start.id);
+  const collegeEnd = COLLEGE_BUS_ROUTE.stops.findIndex(s => s.id === end.id);
+  if (collegeStart !== -1 && collegeEnd !== -1 && collegeEnd > collegeStart) {
+    return {
+      stops: COLLEGE_BUS_ROUTE.stops.slice(collegeStart, collegeEnd + 1),
+      avgTime: COLLEGE_BUS_ROUTE.avgTime,
+    };
+  }
+
+  return {
+    stops: [start, end],
+    avgTime: 30,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
 // MAIN OPTIMIZATION FUNCTION
 // ═══════════════════════════════════════════════════════════════
 
-export function calculateOptimalRoute(): DropPoint[] {
+export function calculateOptimalRoute(input?: RoutePlanInput): DropPoint[] {
+  const commuterProfile: CommuterProfile = input?.commuterProfile ?? { gender: 'male' };
+  const startStop = input?.movingStartId && STOPS[input.movingStartId] ? STOPS[input.movingStartId] : COLLEGE_BUS_ROUTE.stops[0];
+  const movingEndStop = input?.movingEndId && STOPS[input.movingEndId] ? STOPS[input.movingEndId] : COLLEGE_BUS_ROUTE.stops[3];
+  const destinationStop = input?.destinationId && STOPS[input.destinationId] ? STOPS[input.destinationId] : HOME;
+
+  const movingRouteMeta = getMovingRouteStops(startStop, movingEndStop);
+  const movingRouteStops = movingRouteMeta.stops;
+
   console.log('🚀 Starting Enhanced RouteIQ Algorithm...');
   console.log('📊 Building transport network graph...');
   
@@ -393,20 +454,24 @@ export function calculateOptimalRoute(): DropPoint[] {
   
   console.log(`✅ Graph built: ${graph.size} stops, ${Array.from(graph.values()).reduce((sum, node) => sum + node.edges.length, 0)} connections`);
 
+  const candidateDropStops = movingRouteStops.slice(1, -1).length > 0
+    ? movingRouteStops.slice(1, -1)
+    : [movingEndStop];
+
   // Analyze each potential drop point
-  COLLEGE_BUS_ROUTE.stops.slice(1, -1).forEach((stop, index) => {
+  candidateDropStops.forEach((stop, index) => {
     console.log(`\n🔍 Analyzing drop point ${index + 1}: ${stop.name}`);
     
-    const busTimeToStop = calculateBusTimeToStop(stop);
+    const busTimeToStop = calculateBusTimeToStop(movingRouteStops, stop, movingRouteMeta.avgTime);
     console.log(`   ⏱️  Bus time to reach: ${busTimeToStop} min`);
     
-    const routesToHome = findRoutesFromStop(stop);
+    const routesToHome = findRoutesFromStop(stop, destinationStop, commuterProfile);
     console.log(`   📍 Found ${routesToHome.length} route options`);
 
     if (routesToHome.length > 0) {
       const optimalRoute = routesToHome[0];
       
-      // Add college bus time to total time
+      // Add R.M.K CET shuttle time to total time
       optimalRoute.totalTime += busTimeToStop;
       
       // Recalculate score with updated time
@@ -423,21 +488,20 @@ export function calculateOptimalRoute(): DropPoint[] {
     }
   });
 
-  // Add option to stay on bus till college
-  console.log(`\n🔍 Analyzing: Stay on bus till College`);
-  const collegeToHomeRoutes = findRoutesFromStop(STOPS.college);
+  // Add option to stay on moving vehicle till selected end stop
+  console.log(`\n🔍 Analyzing: Stay on moving vehicle till ${movingEndStop.name}`);
+  const collegeToHomeRoutes = findRoutesFromStop(movingEndStop, destinationStop, commuterProfile);
   
   if (collegeToHomeRoutes.length > 0) {
     const stayOnBusOption = collegeToHomeRoutes[0];
-    stayOnBusOption.totalTime += COLLEGE_BUS_ROUTE.avgTime;
-    stayOnBusOption.totalTime += 120;
+    stayOnBusOption.totalTime += movingRouteMeta.avgTime;
     stayOnBusOption.score = calculateScore(stayOnBusOption);
     
     console.log(`   ⏱️  Total time: ${stayOnBusOption.totalTime}min, Score: ${stayOnBusOption.score.toFixed(3)}`);
 
     dropPoints.push({
-      stop: STOPS.college,
-      distanceFromStart: COLLEGE_BUS_ROUTE.stops.length,
+      stop: movingEndStop,
+      distanceFromStart: movingRouteStops.length,
       routesToHome: [stayOnBusOption],
       optimalRoute: stayOnBusOption
     });

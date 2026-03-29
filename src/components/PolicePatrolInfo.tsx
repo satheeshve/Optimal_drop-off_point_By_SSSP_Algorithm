@@ -28,6 +28,8 @@ interface PolicePatrolInfoProps {
   destinationLocation?: { lat: number; lng: number };
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
 export function PolicePatrolInfo({ sourceLocation, destinationLocation }: PolicePatrolInfoProps) {
   const [patrols, setPatrols] = useState<PolicePatrol[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +41,18 @@ export function PolicePatrolInfo({ sourceLocation, destinationLocation }: Police
     }
   }, [sourceLocation, destinationLocation]);
 
+  useEffect(() => {
+    if (!sourceLocation && !destinationLocation) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void fetchNearbyPatrols();
+    }, 20000);
+
+    return () => window.clearInterval(timer);
+  }, [sourceLocation, destinationLocation]);
+
   const fetchNearbyPatrols = async () => {
     try {
       setLoading(true);
@@ -46,18 +60,14 @@ export function PolicePatrolInfo({ sourceLocation, destinationLocation }: Police
       if (!location) return;
 
       // Fetch active patrols near the route
-      const response = await fetch(
-        `http://localhost:8000/api/police/patrols/active?latitude=${location.lat}&longitude=${location.lng}&radius_km=5`
-      );
+      const response = await fetch(`${API_BASE_URL}/police/patrols/active?latitude=${location.lat}&longitude=${location.lng}&radius_km=5`);
 
       if (response.ok) {
         const data = await response.json();
         setPatrols(data);
 
         // Fetch police coverage score
-        const scoreResponse = await fetch(
-          `http://localhost:8000/api/police/patrols/coverage-score?latitude=${location.lat}&longitude=${location.lng}`
-        );
+        const scoreResponse = await fetch(`${API_BASE_URL}/police/patrols/coverage-score?latitude=${location.lat}&longitude=${location.lng}`);
         if (scoreResponse.ok) {
           const scoreData = await scoreResponse.json();
           setPoliceScore(scoreData.score);

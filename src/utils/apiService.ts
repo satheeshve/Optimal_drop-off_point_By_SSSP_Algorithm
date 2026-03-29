@@ -10,6 +10,71 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+export interface GoogleTransitStep {
+  travel_mode: string;
+  line_name?: string;
+  line_short_name?: string;
+  vehicle_type?: string;
+  headsign?: string;
+  departure_stop?: string;
+  arrival_stop?: string;
+  duration_text?: string;
+  distance_text?: string;
+  num_stops?: number;
+}
+
+export interface GoogleTransitRoute {
+  provider: string;
+  summary?: string;
+  distance_text?: string;
+  duration_text?: string;
+  departure_time_text?: string;
+  arrival_time_text?: string;
+  fare_text?: string;
+  fare_value?: number;
+  fare_currency?: string;
+  warnings: string[];
+  steps: GoogleTransitStep[];
+}
+
+export interface OpenRoutePoint {
+  lat: number;
+  lon: number;
+}
+
+export interface OpenRouteResponse {
+  provider: string;
+  distance_km: number;
+  duration_min: number;
+  geometry: OpenRoutePoint[];
+}
+
+export interface GTFSLiveVehicle {
+  entity_id: string;
+  vehicle_id: string;
+  vehicle_label: string;
+  trip_id: string;
+  route_id: string;
+  route_short_name: string;
+  route_long_name: string;
+  mode: string;
+  lat: number;
+  lon: number;
+  bearing?: number | null;
+  speed?: number | null;
+  timestamp?: number | null;
+  occupancy_status?: number | null;
+}
+
+export interface GTFSLiveFeedResponse {
+  provider: string;
+  feed_type: string;
+  route_filter?: string | null;
+  vehicles: GTFSLiveVehicle[];
+  route_shape: OpenRoutePoint[];
+  static_loaded_at?: number | null;
+}
+
 // User Management
 export const registerUser = async (userData: {
   username: string;
@@ -306,6 +371,92 @@ export const compareRoutes = async (
   }
 };
 
+export const getGoogleTransitRoute = async (
+  start_lat: number,
+  start_lon: number,
+  end_lat: number,
+  end_lon: number,
+  departure_time: string = 'now'
+): Promise<ApiResponse<GoogleTransitRoute>> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/routes/google-transit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_lat,
+        start_lon,
+        end_lat,
+        end_lon,
+        departure_time,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return { error: data?.detail || 'Failed to fetch transit route from Google' };
+    }
+
+    return { data };
+  } catch (error) {
+    return { error: String(error) };
+  }
+};
+
+export const getOpenRoute = async (
+  start_lat: number,
+  start_lon: number,
+  end_lat: number,
+  end_lon: number,
+): Promise<ApiResponse<OpenRouteResponse>> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/routes/open-route`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_lat,
+        start_lon,
+        end_lat,
+        end_lon,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return { error: data?.detail || 'Failed to fetch open route' };
+    }
+
+    return { data };
+  } catch (error) {
+    return { error: String(error) };
+  }
+};
+
+export const getGtfsLiveFeed = async (
+  route_short_name?: string,
+  limit: number = 200
+): Promise<ApiResponse<GTFSLiveFeedResponse>> => {
+  try {
+    const params = new URLSearchParams({
+      limit: String(limit),
+    });
+
+    if (route_short_name && route_short_name.trim().length > 0) {
+      params.set('route_short_name', route_short_name.trim());
+    }
+
+    const response = await fetch(`${API_BASE_URL}/transit/live-feed?${params.toString()}`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { error: data?.detail || 'Failed to fetch GTFS live feed' };
+    }
+
+    return { data };
+  } catch (error) {
+    return { error: String(error) };
+  }
+};
+
 // Health Check
 export const checkBackendHealth = async (): Promise<ApiResponse<any>> => {
   try {
@@ -331,5 +482,8 @@ export default {
   addEmergencyContact,
   planRoute,
   compareRoutes,
+  getGoogleTransitRoute,
+  getOpenRoute,
+  getGtfsLiveFeed,
   checkBackendHealth,
 };

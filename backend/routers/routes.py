@@ -9,9 +9,14 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional
 import heapq
 import math
+import aiohttp
+import urllib.parse
+import urllib.request
+import json
 
 from database import get_db
 from routers.safety import calculate_incident_score, calculate_feedback_score
+from config import settings
 
 router = APIRouter()
 
@@ -34,6 +39,67 @@ class RouteResponse(BaseModel):
     total_fare: float
     average_safety_score: float
     waypoints: int
+
+
+class GoogleTransitRouteRequest(BaseModel):
+    start_lat: float
+    start_lon: float
+    end_lat: float
+    end_lon: float
+    departure_time: Optional[str] = "now"
+
+
+class GoogleTransitStep(BaseModel):
+    travel_mode: str
+    line_name: Optional[str] = None
+    line_short_name: Optional[str] = None
+    vehicle_type: Optional[str] = None
+    headsign: Optional[str] = None
+    departure_stop: Optional[str] = None
+    arrival_stop: Optional[str] = None
+    duration_text: Optional[str] = None
+    distance_text: Optional[str] = None
+    num_stops: Optional[int] = None
+
+
+class GoogleTransitRouteResponse(BaseModel):
+    provider: str
+    summary: Optional[str] = None
+    distance_text: Optional[str] = None
+    duration_text: Optional[str] = None
+    departure_time_text: Optional[str] = None
+    arrival_time_text: Optional[str] = None
+    fare_text: Optional[str] = None
+    fare_value: Optional[float] = None
+    fare_currency: Optional[str] = None
+    warnings: List[str]
+    steps: List[GoogleTransitStep]
+
+
+class OpenRouteRequest(BaseModel):
+    start_lat: float
+    start_lon: float
+    end_lat: float
+    end_lon: float
+
+
+class OpenRouteResponse(BaseModel):
+    provider: str
+    distance_km: float
+    duration_min: float
+    geometry: List[Dict[str, float]]
+
+
+class OpenGeocodeResult(BaseModel):
+    display_name: str
+    lat: float
+    lon: float
+
+
+class OpenGeocodeResponse(BaseModel):
+    provider: str
+    query: str
+    results: List[OpenGeocodeResult]
 
 # Sample Chennai transit network
 CHENNAI_NETWORK = {
@@ -292,3 +358,211 @@ def compare_routes(request: RouteRequest, db: Session = Depends(get_db)):
             "description": "Safety-aware routing improvement as per paper Section VIII"
         }
     }
+
+
+@router.post("/google-transit", response_model=GoogleTransitRouteResponse)
+async def get_google_transit_route(request: GoogleTransitRouteRequest):
+    """
+    Get Google transit route enrichment (bus/metro line details, ETA and fare).
+
+    This endpoint is optional and only works when GOOGLE_MAPS_API_KEY is configured.
+    """
+    if not settings.GOOGLE_MAPS_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="Google transit integration is not configured on the server"
+        )
+
+    params = {
+        "origin": f"{request.start_lat},{request.start_lon}",
+        "destination": f"{request.end_lat},{request.end_lon}",
+        "mode": "transit",
+        "alternatives": "true",
+        "departure_time": request.departure_time or "now",
+        "key": settings.GOOGLE_MAPS_API_KEY,
+    }
+
+    timeout = aiohttp.ClientTimeout(total=settings.GOOGLE_MAPS_TIMEOUT_SECONDS)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        try:
+            async with session.get(settings.GOOGLE_DIRECTIONS_URL, params=params) as response:
+                if response.status != 200:
+                    body = await response.text()
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Google Directions API error: HTTP {response.status}: {body[:300]}"
+                    )
+                payload = await response.json()
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Google Directions request failed: {str(exc)}")
+
+    api_status = payload.get("status")
+    if api_status != "OK":
+        if api_status == "ZERO_RESULTS":
+            raise HTTPException(status_code=404, detail="No transit route found for this origin and destination")
+        raise HTTPException(status_code=502, detail=f"Google Directions API status: {api_status}")
+
+    route = payload["routes"][0]
+    leg = route["legs"][0] if route.get("legs") else {}
+
+    fare_info = route.get("fare") or leg.get("fare") or {}
+
+    parsed_steps: List[GoogleTransitStep] = []
+    for step in leg.get("steps", []):
+        transit_details = step.get("transit_details", {})
+        line = transit_details.get("line", {})
+        vehicle = line.get("vehicle", {})
+
+        parsed_steps.append(
+            GoogleTransitStep(
+                travel_mode=step.get("travel_mode", "UNKNOWN"),
+                line_name=line.get("name"),
+                line_short_name=line.get("short_name"),
+                vehicle_type=vehicle.get("type"),
+                headsign=transit_details.get("headsign"),
+                departure_stop=(transit_details.get("departure_stop") or {}).get("name"),
+                arrival_stop=(transit_details.get("arrival_stop") or {}).get("name"),
+                duration_text=(step.get("duration") or {}).get("text"),
+                distance_text=(step.get("distance") or {}).get("text"),
+                num_stops=transit_details.get("num_stops"),
+            )
+        )
+
+    return GoogleTransitRouteResponse(
+        provider="google-directions",
+        summary=route.get("summary"),
+        distance_text=(leg.get("distance") or {}).get("text"),
+        duration_text=(leg.get("duration") or {}).get("text"),
+        departure_time_text=(leg.get("departure_time") or {}).get("text"),
+        arrival_time_text=(leg.get("arrival_time") or {}).get("text"),
+        fare_text=fare_info.get("text"),
+        fare_value=float(fare_info["value"]) if fare_info.get("value") is not None else None,
+        fare_currency=fare_info.get("currency"),
+        warnings=route.get("warnings", []),
+        steps=parsed_steps,
+    )
+
+
+@router.post("/open-route", response_model=OpenRouteResponse)
+def get_open_route(request: OpenRouteRequest):
+    """
+    Open-source routing fallback using OSRM public API.
+
+    Useful for demos and as a non-Google baseline. Does not include fare.
+    """
+    coords = f"{request.start_lon},{request.start_lat};{request.end_lon},{request.end_lat}"
+    query = urllib.parse.urlencode({
+        "overview": "full",
+        "geometries": "geojson",
+        "alternatives": "false",
+        "steps": "false",
+    })
+    url = f"{settings.OSRM_ROUTE_URL.rstrip('/')}/{coords}?{query}"
+
+    try:
+        with urllib.request.urlopen(url, timeout=settings.OPENMAP_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Open-route provider request failed: {str(exc)}")
+
+    routes = payload.get("routes", [])
+    if not routes:
+        raise HTTPException(status_code=404, detail="No open route found for this origin and destination")
+
+    route = routes[0]
+    geometry = route.get("geometry", {}).get("coordinates", [])
+
+    mapped_geometry = [
+        {"lat": point[1], "lon": point[0]}
+        for point in geometry
+        if isinstance(point, list) and len(point) >= 2
+    ]
+
+    return OpenRouteResponse(
+        provider="osrm",
+        distance_km=round(float(route.get("distance", 0)) / 1000, 3),
+        duration_min=round(float(route.get("duration", 0)) / 60, 2),
+        geometry=mapped_geometry,
+    )
+
+
+@router.get("/open-geocode", response_model=OpenGeocodeResponse)
+def open_geocode(query: str):
+    """
+    Geocode using Nominatim (OpenStreetMap ecosystem).
+    """
+    if not query.strip():
+        raise HTTPException(status_code=400, detail="Query is required")
+
+    params = urllib.parse.urlencode({
+        "q": query,
+        "format": "jsonv2",
+        "limit": 5,
+    })
+    request_url = f"{settings.NOMINATIM_SEARCH_URL}?{params}"
+    req = urllib.request.Request(
+        request_url,
+        headers={"User-Agent": settings.OPENMAP_USER_AGENT},
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=settings.OPENMAP_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        results = [
+            OpenGeocodeResult(
+                display_name=item.get("display_name", ""),
+                lat=float(item.get("lat", 0.0)),
+                lon=float(item.get("lon", 0.0)),
+            )
+            for item in payload
+        ]
+
+        return OpenGeocodeResponse(
+            provider="nominatim",
+            query=query,
+            results=results,
+        )
+    except Exception:
+        # Fallback provider for environments where Nominatim is blocked/rate-limited.
+        photon_params = urllib.parse.urlencode({
+            "q": query,
+            "limit": 5,
+        })
+        photon_url = f"{settings.PHOTON_SEARCH_URL}?{photon_params}"
+        photon_req = urllib.request.Request(
+            photon_url,
+            headers={"User-Agent": settings.OPENMAP_USER_AGENT},
+        )
+
+        try:
+            with urllib.request.urlopen(photon_req, timeout=settings.OPENMAP_TIMEOUT_SECONDS) as response:
+                photon_payload = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Open-geocode provider request failed: {str(exc)}")
+
+        features = photon_payload.get("features", [])
+        results = []
+        for feature in features:
+            props = feature.get("properties", {})
+            coords = (feature.get("geometry") or {}).get("coordinates", [0, 0])
+            if len(coords) < 2:
+                continue
+            name = props.get("name") or props.get("street") or "Unknown"
+            city = props.get("city") or props.get("state") or props.get("country") or ""
+            display = f"{name}, {city}".strip(", ")
+            results.append(
+                OpenGeocodeResult(
+                    display_name=display,
+                    lat=float(coords[1]),
+                    lon=float(coords[0]),
+                )
+            )
+
+        return OpenGeocodeResponse(
+            provider="photon",
+            query=query,
+            results=results,
+        )

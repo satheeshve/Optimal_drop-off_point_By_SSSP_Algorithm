@@ -10,18 +10,67 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Badge } from '../ui/badge';
 import { HazardReport, HazardCategory } from '@/types/hazardTypes';
+import { submitHazardReport } from '@/utils/apiService';
+
+interface HazardPreset {
+  id: string;
+  label: string;
+  category: HazardCategory;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  title: string;
+  description: string;
+}
 
 export function HazardReportForm() {
+  const presets: HazardPreset[] = [
+    {
+      id: 'general-safety',
+      label: 'General Safety',
+      category: 'safety_concern',
+      severity: 'medium',
+      title: 'Safety concern reported in commuter area',
+      description: 'Observed suspicious behavior near a transit point. Requesting patrol visibility and verification.',
+    },
+    {
+      id: 'traffic-accident',
+      label: 'Traffic Accident',
+      category: 'accident',
+      severity: 'high',
+      title: 'Road accident affecting movement',
+      description: 'Accident reported near route corridor. Traffic is slow and route planning may need rerouting.',
+    },
+    {
+      id: 'facility-lighting',
+      label: 'Facility / Lighting',
+      category: 'facility_issue',
+      severity: 'medium',
+      title: 'Street light / facility issue',
+      description: 'Public safety infrastructure is not functioning. Area visibility is low and requires maintenance.',
+    },
+    {
+      id: 'crime-alert',
+      label: 'Crime Alert',
+      category: 'crime',
+      severity: 'critical',
+      title: 'Potential crime activity reported',
+      description: 'Possible criminal activity observed. Immediate verification and police attention requested.',
+    },
+  ];
+
+  const defaultPreset = presets[0];
+
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState<string>(defaultPreset.id);
   
   const [formData, setFormData] = useState({
-    category: 'safety_concern' as HazardCategory,
-    severity: 'medium' as 'low' | 'medium' | 'high' | 'critical',
-    title: '',
-    description: '',
+    category: defaultPreset.category,
+    severity: defaultPreset.severity,
+    title: defaultPreset.title,
+    description: defaultPreset.description,
     isAnonymous: false,
   });
 
@@ -34,6 +83,22 @@ export function HazardReportForm() {
     { value: 'crime', label: '🚨 Crime Alert', icon: '🚨' },
     { value: 'positive', label: '✅ Positive Report', icon: '✅' },
   ];
+
+  const applyPreset = (presetId: string) => {
+    const preset = presets.find((item) => item.id === presetId);
+    if (!preset) {
+      return;
+    }
+
+    setSelectedPreset(preset.id);
+    setFormData((prev) => ({
+      ...prev,
+      category: preset.category,
+      severity: preset.severity,
+      title: preset.title,
+      description: preset.description,
+    }));
+  };
 
   const handleGetLocation = () => {
     if (navigator.geolocation) {
@@ -61,10 +126,28 @@ export function HazardReportForm() {
     }
 
     setIsSubmitting(true);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
+    setSubmitError(null);
+
+    const storedReporterId = Number(localStorage.getItem('reporterUserId'));
+    const reporterId = Number.isFinite(storedReporterId) && storedReporterId > 0 ? storedReporterId : 1;
+
+    const response = await submitHazardReport({
+      user_id: reporterId,
+      latitude: location.lat,
+      longitude: location.lng,
+      category: formData.category,
+      severity: formData.severity,
+      title: formData.title.trim(),
+      description: formData.description.trim(),
+      is_anonymous: formData.isAnonymous,
+    });
+
+    if (response.error) {
+      setSubmitError(response.error);
+      setIsSubmitting(false);
+      return;
+    }
+
     const report: Partial<HazardReport> = {
       ...formData,
       location,
@@ -73,9 +156,9 @@ export function HazardReportForm() {
       upvotes: 0,
       downvotes: 0,
     };
-    
+
     console.log('Submitting hazard report:', report);
-    
+
     setIsSubmitting(false);
     setSubmitted(true);
     
@@ -84,12 +167,14 @@ export function HazardReportForm() {
       setSubmitted(false);
       setIsOpen(false);
       setFormData({
-        category: 'safety_concern',
-        severity: 'medium',
-        title: '',
-        description: '',
+        category: defaultPreset.category,
+        severity: defaultPreset.severity,
+        title: defaultPreset.title,
+        description: defaultPreset.description,
         isAnonymous: false,
       });
+      setSelectedPreset(defaultPreset.id);
+      setSubmitError(null);
       setLocation(null);
     }, 3000);
   };
@@ -165,6 +250,23 @@ export function HazardReportForm() {
             
             <CardContent className="pt-6">
               <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <Label>Quick Presets</Label>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {presets.map((preset) => (
+                      <Button
+                        key={preset.id}
+                        type="button"
+                        variant={selectedPreset === preset.id ? 'default' : 'outline'}
+                        className="h-auto justify-start px-3 py-2 text-left text-xs"
+                        onClick={() => applyPreset(preset.id)}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Location */}
                 <div className="space-y-2">
                   <Label>Location *</Label>
@@ -319,6 +421,12 @@ export function HazardReportForm() {
                     )}
                   </Button>
                 </div>
+
+                {submitError && (
+                  <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {submitError}
+                  </p>
+                )}
               </form>
             </CardContent>
           </>

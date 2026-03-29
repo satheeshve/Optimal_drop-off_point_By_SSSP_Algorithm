@@ -19,14 +19,14 @@ REM Check if backend is running
 curl -s http://localhost:8000/api/health >nul 2>&1
 if errorlevel 1 (
     echo [WARNING] Backend not running on port 8000
-    echo Please start the backend first: START_DEMO.bat
+    echo Please start the backend first: START_LOCAL.bat
     echo.
     choice /C YN /M "Do you want to start the backend now"
     if errorlevel 2 goto :skip_backend
     
     echo.
     echo Starting backend...
-    start "Backend API" cmd /k "cd /d "%~dp0backend" && if exist venv\Scripts\activate.bat (call venv\Scripts\activate.bat && python main.py) else (python main.py)"
+    start "Backend API" cmd /k "cd /d "%~dp0backend" && call START_BACKEND.bat"
     echo Waiting for backend to start (10 seconds)...
     timeout /t 10 >nul
 )
@@ -44,7 +44,7 @@ set FAILED=0
 set API_URL=http://localhost:8000
 
 REM Test 1: Health Check
-echo [TEST 1/10] Health Check Endpoint...
+echo [TEST 1/11] Health Check Endpoint...
 curl -s %API_URL%/api/health >nul 2>&1
 if errorlevel 1 (
     echo   ❌ FAILED: Backend not accessible
@@ -56,7 +56,7 @@ if errorlevel 1 (
 
 REM Test 2: Root Endpoint
 echo.
-echo [TEST 2/10] Root Endpoint...
+echo [TEST 2/11] Root Endpoint...
 curl -s %API_URL%/ | find "Commuter Genius API" >nul 2>&1
 if errorlevel 1 (
     echo   ❌ FAILED: Root endpoint error
@@ -68,7 +68,7 @@ if errorlevel 1 (
 
 REM Test 3: API Documentation
 echo.
-echo [TEST 3/10] API Documentation...
+echo [TEST 3/11] API Documentation...
 curl -s %API_URL%/api/docs | find "FastAPI" >nul 2>&1
 if errorlevel 1 (
     echo   ❌ FAILED: API docs not accessible
@@ -80,7 +80,7 @@ if errorlevel 1 (
 
 REM Test 4: CORS Headers
 echo.
-echo [TEST 4/10] CORS Configuration...
+echo [TEST 4/11] CORS Configuration...
 curl -s -I %API_URL%/api/health | find "access-control-allow-origin" >nul 2>&1
 if errorlevel 1 (
     echo   ⚠️  WARNING: CORS headers not found
@@ -92,7 +92,7 @@ if errorlevel 1 (
 
 REM Test 5: Database Connection
 echo.
-echo [TEST 5/10] Database Connection...
+echo [TEST 5/11] Database Connection...
 REM This will be tested via API endpoint
 curl -s %API_URL%/api/health >nul 2>&1
 if errorlevel 1 (
@@ -105,7 +105,7 @@ if errorlevel 1 (
 
 REM Test 6: User Registration (Simulation)
 echo.
-echo [TEST 6/10] User Management Endpoints...
+echo [TEST 6/11] User Management Endpoints...
 curl -s %API_URL%/api/docs | find "users" >nul 2>&1
 if errorlevel 1 (
     echo   ❌ FAILED: User endpoints not found
@@ -117,7 +117,7 @@ if errorlevel 1 (
 
 REM Test 7: Hazard Reporting Endpoints
 echo.
-echo [TEST 7/10] Hazard Reporting Endpoints...
+echo [TEST 7/11] Hazard Reporting Endpoints...
 curl -s %API_URL%/api/docs | find "hazards" >nul 2>&1
 if errorlevel 1 (
     echo   ❌ FAILED: Hazard endpoints not found
@@ -129,7 +129,7 @@ if errorlevel 1 (
 
 REM Test 8: Emergency SOS Endpoints
 echo.
-echo [TEST 8/10] Emergency SOS Endpoints...
+echo [TEST 8/11] Emergency SOS Endpoints...
 curl -s %API_URL%/api/docs | find "emergency" >nul 2>&1
 if errorlevel 1 (
     echo   ❌ FAILED: Emergency endpoints not found
@@ -141,7 +141,7 @@ if errorlevel 1 (
 
 REM Test 9: Route Planning Endpoints
 echo.
-echo [TEST 9/10] Route Planning Endpoints...
+echo [TEST 9/11] Route Planning Endpoints...
 curl -s %API_URL%/api/docs | find "routes" >nul 2>&1
 if errorlevel 1 (
     echo   ❌ FAILED: Route endpoints not found
@@ -153,13 +153,25 @@ if errorlevel 1 (
 
 REM Test 10: Police Patrol Endpoints
 echo.
-echo [TEST 10/10] Police Patrol Endpoints...
+echo [TEST 10/11] Police Patrol Endpoints...
 curl -s %API_URL%/api/docs | find "police" >nul 2>&1
 if errorlevel 1 (
     echo   ❌ FAILED: Police endpoints not found
     set /a FAILED+=1
 ) else (
     echo   ✅ PASSED: Police endpoints available
+    set /a PASSED+=1
+)
+
+REM Test 11: Transit Live Tracking Endpoints
+echo.
+echo [TEST 11/11] Transit Live Tracking Endpoints...
+curl -s %API_URL%/api/docs | find "transit" >nul 2>&1
+if errorlevel 1 (
+    echo   ❌ FAILED: Transit endpoints not found
+    set /a FAILED+=1
+) else (
+    echo   ✅ PASSED: Transit endpoints available
     set /a PASSED+=1
 )
 

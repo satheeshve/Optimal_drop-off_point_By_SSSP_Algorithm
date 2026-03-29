@@ -20,6 +20,7 @@ const AdminLogin = () => {
     if (username === 'computer' && password === 'pass@3456') {
       // Store admin session
       sessionStorage.setItem('adminAuth', 'true');
+      sessionStorage.setItem('adminUserId', '1');
       navigate('/admin/dashboard');
     } else {
       setError('Invalid username or password');

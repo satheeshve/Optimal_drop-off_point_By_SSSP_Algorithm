@@ -9,6 +9,7 @@ echo  COMMUTER GENIUS - Quick Start
 echo ============================================
 echo.
 echo  Features: Safety-Aware Routing + Police Patrol
+echo            Real GTFS Bus/Train Live Tracking
 echo  Database: SQLite (No PostgreSQL required!)
 echo.
 echo ============================================
@@ -48,7 +49,7 @@ echo Dependencies OK!
 echo.
 
 echo [2/4] Starting Backend API (SQLite)...
-start "Backend API - Port 8000" cmd /k "cd /d "%~dp0backend" && if exist venv\Scripts\activate.bat (call venv\Scripts\activate.bat && python main.py) else (python main.py)"
+start "Backend API - Port 8000" cmd /k "cd /d "%~dp0backend" && call START_BACKEND.bat"
 timeout /t 8 >nul
 
 echo [3/4] Starting Frontend (Vite)...
@@ -67,6 +68,7 @@ echo.
 echo  Frontend:  http://localhost:8080
 echo  Backend:   http://localhost:8000
 echo  API Docs:  http://localhost:8000/api/docs
+echo  GTFS Live: http://localhost:8000/api/transit/live-feed
 echo.
 echo ============================================
 echo  QUICK GUIDE
@@ -74,8 +76,9 @@ echo ============================================
 echo.
 echo  1. Homepage shows ICON DASHBOARD
 echo  2. Click "Police Patrol" to add patrol data
-echo  3. Search routes to see police coverage
-echo  4. Check NAVIGATION_GUIDE.md for details
+echo  3. Calculate a route and open Route Map tab
+echo  4. Use GTFS section to track bus/train number live
+echo  5. Check NAVIGATION_GUIDE.md for details
 echo.
 echo  Press Ctrl+C in each terminal to stop
 echo.

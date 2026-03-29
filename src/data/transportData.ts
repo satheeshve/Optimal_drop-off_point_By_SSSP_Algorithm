@@ -22,9 +22,19 @@ export interface Route {
   name: string;
   stops: Stop[];
   fare: number;
+  farePolicy?: {
+    category: 'regular' | 'pink';
+    maleFare?: number;
+    femaleFare?: number;
+    defaultFare?: number;
+  };
   avgTime: number; // minutes
   type: 'bus' | 'metro' | 'train';
   nextArrival?: number; // minutes until next vehicle arrives
+}
+
+export interface CommuterProfile {
+  gender?: 'male' | 'female' | 'other';
 }
 
 export interface DropPoint {
@@ -121,16 +131,16 @@ export const STOPS: Record<string, Stop> = {
       vehicleNumber: 'TN01-P-4567'
     }
   },
-  college: {
-    id: 'college',
-    name: 'College',
-    lat: 13.1854,
-    lng: 80.2547,
+  rmkcet: {
+    id: 'rmkcet',
+    name: 'R.M.K College of Engineering and Technology',
+    lat: 13.3295,
+    lng: 80.141,
     type: 'bus',
     crimeRate: 'low',
     policePatrol: {
       isActive: true,
-      patrolName: 'Zone-5 Educational Area Patrol',
+      patrolName: 'Zone-5 Puduvoyal Educational Corridor Patrol',
       officerName: 'Inspector Lakshmi Devi',
       contactNumber: '+91-9840567890',
       shiftTime: '07:00 AM - 09:00 PM',
@@ -171,10 +181,10 @@ export const STOPS: Record<string, Stop> = {
   }
 };
 
-// College bus route: Planetarium → Guindy → CMBT → Red Hills → College
+// R.M.K CET shuttle route: Planetarium → Guindy → CMBT → Red Hills → R.M.K CET
 export const COLLEGE_BUS_ROUTE: Route = {
   id: 'college_bus',
-  name: 'College Bus',
+  name: 'R.M.K CET Shuttle',
   type: 'bus',
   fare: 0,
   avgTime: 120,
@@ -183,7 +193,7 @@ export const COLLEGE_BUS_ROUTE: Route = {
     STOPS.guindy,
     STOPS.cmbt,
     STOPS.redhills,
-    STOPS.college
+    STOPS.rmkcet
   ]
 };
 
@@ -202,13 +212,32 @@ export const TRANSPORT_ROUTES: Route[] = [
   
   // Direct Bus Routes
   {
-    id: 'bus_77',
-    name: 'Bus 77 (CMBT-Avadi Direct)',
+    id: 'bus_77_deluxe',
+    name: 'Bus 77 Deluxe (CMBT-Avadi Direct)',
     type: 'bus',
-    fare: 17, // ₹17 fare - Koyambedu to Avadi direct route
+    fare: 35,
+    farePolicy: {
+      category: 'regular',
+      defaultFare: 35,
+    },
     avgTime: 45,
     stops: [STOPS.cmbt, STOPS.avadi],
     nextArrival: 15, // Bus arrives in 15 minutes
+  },
+  {
+    id: 'bus_77_pink',
+    name: 'Bus 77 Pink (CMBT-Avadi Direct)',
+    type: 'bus',
+    fare: 20,
+    farePolicy: {
+      category: 'pink',
+      maleFare: 20,
+      femaleFare: 0,
+      defaultFare: 20,
+    },
+    avgTime: 47,
+    stops: [STOPS.cmbt, STOPS.avadi],
+    nextArrival: 19,
   },
   {
     id: 'bus_central_avadi',
@@ -276,14 +305,14 @@ export const TRANSPORT_ROUTES: Route[] = [
     nextArrival: 9, // Bus arrives in 9 minutes
   },
   
-  // College to Avadi routes
+  // R.M.K CET to Avadi routes
   {
-    id: 'bus_college_avadi',
-    name: 'Bus 12 (College-Avadi)',
+    id: 'bus_rmkcet_avadi',
+    name: 'Bus 12 (R.M.K CET-Avadi)',
     type: 'bus',
     fare: 30,
     avgTime: 90,
-    stops: [STOPS.college, STOPS.avadi],
+    stops: [STOPS.rmkcet, STOPS.avadi],
     nextArrival: 20, // Bus arrives in 20 minutes
   },
   
@@ -360,4 +389,18 @@ export function getCrimeRateColor(score: number): string {
   if (score >= 60) return 'text-blue-600';
   if (score >= 40) return 'text-yellow-600';
   return 'text-red-600';
+}
+
+// Compute fare based on service type and commuter profile.
+export function getEffectiveFare(route: Route, profile: CommuterProfile = { gender: 'male' }): number {
+  const policy = route.farePolicy;
+  if (!policy) return route.fare;
+
+  if (policy.category === 'pink') {
+    if (profile.gender === 'female') return policy.femaleFare ?? 0;
+    if (profile.gender === 'male') return policy.maleFare ?? policy.defaultFare ?? route.fare;
+    return policy.defaultFare ?? route.fare;
+  }
+
+  return policy.defaultFare ?? route.fare;
 }

@@ -26,7 +26,7 @@ if not errorlevel 1 (
 )
 
 echo [1/3] Starting Backend API...
-start "Backend API - Port 8000" cmd /k "cd /d "%~dp0backend" && (if exist venv\Scripts\activate.bat (call venv\Scripts\activate.bat) else echo No venv found) && python main.py"
+start "Backend API - Port 8000" cmd /k "cd /d "%~dp0backend" && call START_BACKEND.bat"
 echo Waiting for backend to start...
 timeout /t 10 >nul
 
@@ -57,6 +57,10 @@ start http://localhost:8080
 REM Wait a bit then open API docs
 timeout /t 2 >nul
 start http://localhost:8000/api/docs
+
+REM Open GTFS live endpoint for quick validation
+timeout /t 2 >nul
+start http://localhost:8000/api/transit/live-feed
 
 REM Open the testing checklist
 timeout /t 2 >nul

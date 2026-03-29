@@ -24,7 +24,9 @@ import {
   STOPS,
   TRANSPORT_ROUTES,
   HOME,
-  WEIGHTS
+  WEIGHTS,
+  CommuterProfile,
+  getEffectiveFare
 } from '@/data/transportData';
 
 // ===================================================================
@@ -272,6 +274,7 @@ function enhancedSSSP(
   graph: Map<string, GraphNode>,
   start: Stop,
   end: Stop,
+  commuterProfile: CommuterProfile = { gender: 'male' },
   maxTransfers: number = 3
 ): RouteOption[] {
   // Initialize priority queue
@@ -336,6 +339,8 @@ function enhancedSSSP(
       // Check if this is a transfer
       const isTransfer = current.lastRoute !== null && 
                         current.lastRoute.id !== edge.route.id;
+      const isFirstBoarding = current.lastRoute === null;
+      const isNewBoarding = isFirstBoarding || isTransfer;
       
       const newTransfers = current.transfers + (isTransfer ? 1 : 0);
       
@@ -348,7 +353,8 @@ function enhancedSSSP(
 
       // Calculate new costs
       const newTime = current.totalTime + edge.time + waitTime;
-      const newFare = current.totalFare + (isTransfer ? edge.fare : 0);
+      const boardedFare = getEffectiveFare(edge.route, commuterProfile);
+      const newFare = current.totalFare + (isNewBoarding ? boardedFare : 0);
 
       // Create new segment
       const segment: RouteSegment = {
@@ -357,7 +363,7 @@ function enhancedSSSP(
         mode: edge.route.type,
         routeName: edge.route.name,
         time: edge.time,
-        fare: isTransfer ? edge.fare : 0,
+        fare: isNewBoarding ? boardedFare : 0,
         waitTime
       };
 

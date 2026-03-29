@@ -9,6 +9,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge';
 import { Textarea } from '../ui/textarea';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
+const parseApiError = async (response: Response, fallback: string) => {
+  try {
+    const data = await response.json();
+    if (typeof data?.detail === 'string') return data.detail;
+    if (Array.isArray(data?.detail)) return data.detail.map((d: any) => d?.msg).filter(Boolean).join(', ') || fallback;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 interface PolicePatrol {
   id: number;
   station_name: string;
@@ -34,28 +47,73 @@ interface PolicePatrol {
 }
 
 export function PolicePatrolManager() {
+  const patrolPresets = [
+    {
+      id: 'city-core',
+      label: 'City Core Day Patrol',
+      station_name: 'Central Police Station',
+      station_code: 'CPS001',
+      patrol_route_name: 'Central Transit Core Patrol',
+      patrol_area_description: 'Railway station approach roads and central bus interchanges.',
+      shift_type: 'morning',
+      start_time: '06:00',
+      end_time: '14:00',
+      emergency_contact: '100',
+      coverage_radius_km: 2.5,
+    },
+    {
+      id: 'it-corridor',
+      label: 'IT Corridor Evening Patrol',
+      station_name: 'OMR Police Station',
+      station_code: 'OMR002',
+      patrol_route_name: 'Sholinganallur-Navalur Corridor Patrol',
+      patrol_area_description: 'IT corridor commuter routes and evening office-hour hotspots.',
+      shift_type: 'evening',
+      start_time: '18:00',
+      end_time: '02:00',
+      emergency_contact: '100',
+      coverage_radius_km: 3.0,
+    },
+    {
+      id: 'night-safety',
+      label: 'Night Safety Sweep',
+      station_name: 'North Division Patrol Unit',
+      station_code: 'NDP003',
+      patrol_route_name: 'North Chennai Night Safety Patrol',
+      patrol_area_description: 'Night patrol for low-visibility segments and key transfer points.',
+      shift_type: 'night',
+      start_time: '22:00',
+      end_time: '06:00',
+      emergency_contact: '100',
+      coverage_radius_km: 2.0,
+    },
+  ];
+
+  const defaultPreset = patrolPresets[0];
+
   const [patrols, setPatrols] = useState<PolicePatrol[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState<string>(defaultPreset.id);
 
   const [formData, setFormData] = useState({
-    station_name: '',
-    station_code: '',
+    station_name: defaultPreset.station_name,
+    station_code: defaultPreset.station_code,
     latitude: '',
     longitude: '',
-    patrol_route_name: '',
-    patrol_area_description: '',
+    patrol_route_name: defaultPreset.patrol_route_name,
+    patrol_area_description: defaultPreset.patrol_area_description,
     shift_date: new Date().toISOString().split('T')[0],
-    shift_type: 'morning',
-    start_time: '06:00',
-    end_time: '14:00',
+    shift_type: defaultPreset.shift_type,
+    start_time: defaultPreset.start_time,
+    end_time: defaultPreset.end_time,
     officer_in_charge: '',
     officer_badge_number: '',
     patrol_vehicle_number: '',
     contact_number: '',
-    emergency_contact: '100',
-    coverage_radius_km: 2.0,
+    emergency_contact: defaultPreset.emergency_contact,
+    coverage_radius_km: defaultPreset.coverage_radius_km,
     created_by: 'admin' // In real app, get from auth context
   });
 
@@ -70,6 +128,35 @@ export function PolicePatrolManager() {
     fetchTodaysPatrols();
     getCurrentLocation();
   }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void fetchTodaysPatrols();
+    }, 20000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const applyPreset = (presetId: string) => {
+    const preset = patrolPresets.find((item) => item.id === presetId);
+    if (!preset) {
+      return;
+    }
+
+    setSelectedPreset(preset.id);
+    setFormData((prev) => ({
+      ...prev,
+      station_name: preset.station_name,
+      station_code: preset.station_code,
+      patrol_route_name: preset.patrol_route_name,
+      patrol_area_description: preset.patrol_area_description,
+      shift_type: preset.shift_type,
+      start_time: preset.start_time,
+      end_time: preset.end_time,
+      emergency_contact: preset.emergency_contact,
+      coverage_radius_km: preset.coverage_radius_km,
+    }));
+  };
 
   const getCurrentLocation = () => {
     if (navigator.geolocation) {
@@ -87,10 +174,13 @@ export function PolicePatrolManager() {
 
   const fetchTodaysPatrols = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/police/patrols/today');
+      const response = await fetch(`${API_BASE_URL}/police/patrols/today`);
       if (response.ok) {
         const data = await response.json();
         setPatrols(data);
+      } else {
+        const detail = await parseApiError(response, 'Failed to load patrols');
+        console.error('Error fetching patrols:', detail);
       }
     } catch (error) {
       console.error('Error fetching patrols:', error);
@@ -136,14 +226,27 @@ export function PolicePatrolManager() {
       alert('Please enter GPS coordinates or use current location');
       return;
     }
+
+    const latitude = parseFloat(formData.latitude);
+    const longitude = parseFloat(formData.longitude);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      alert('Invalid GPS coordinates. Please enter valid numeric values.');
+      return;
+    }
+
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      alert('Coordinates are out of range. Latitude must be -90 to 90 and longitude must be -180 to 180.');
+      return;
+    }
     
     setLoading(true);
 
     try {
       const payload = {
         ...formData,
-        latitude: parseFloat(formData.latitude),
-        longitude: parseFloat(formData.longitude),
+        latitude,
+        longitude,
         coverage_radius_km: parseFloat(formData.coverage_radius_km.toString()),
         station_name: formData.station_name.trim(),
         station_code: formData.station_code.trim(),
@@ -158,7 +261,7 @@ export function PolicePatrolManager() {
       
       console.log('Sending patrol data:', payload);
       
-      const response = await fetch('http://localhost:8000/api/police/patrols', {
+      const response = await fetch(`${API_BASE_URL}/police/patrols`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -170,9 +273,9 @@ export function PolicePatrolManager() {
         fetchTodaysPatrols();
         resetForm();
       } else {
-        const error = await response.json().catch(() => ({ detail: 'Unknown error occurred' }));
-        console.error('Server error:', error);
-        alert(`❌ Error adding patrol: ${error.detail || 'Please check all fields and try again'}`);
+        const detail = await parseApiError(response, 'Please check all fields and try again');
+        console.error('Server error:', detail);
+        alert(`❌ Error adding patrol: ${detail}`);
       }
     } catch (error) {
       console.error('Network error:', error);
@@ -184,7 +287,7 @@ export function PolicePatrolManager() {
 
   const updatePatrolStatus = async (patrolId: number, status: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/police/patrols/${patrolId}`, {
+      const response = await fetch(`${API_BASE_URL}/police/patrols/${patrolId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, is_active: status === 'active' })
@@ -194,8 +297,8 @@ export function PolicePatrolManager() {
         alert(`✅ Patrol status updated to ${status}`);
         fetchTodaysPatrols();
       } else {
-        const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        alert(`❌ Error: ${error.detail}`);
+        const detail = await parseApiError(response, 'Failed to update patrol status');
+        alert(`❌ Error: ${detail}`);
       }
     } catch (error) {
       console.error('Error updating patrol:', error);
@@ -209,7 +312,7 @@ export function PolicePatrolManager() {
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/police/patrols/${patrolId}`, {
+      const response = await fetch(`${API_BASE_URL}/police/patrols/${patrolId}`, {
         method: 'DELETE'
       });
 
@@ -217,8 +320,8 @@ export function PolicePatrolManager() {
         alert('✅ Patrol route deleted successfully!');
         fetchTodaysPatrols();
       } else {
-        const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        alert(`❌ Error: ${error.detail}`);
+        const detail = await parseApiError(response, 'Failed to delete patrol route');
+        alert(`❌ Error: ${detail}`);
       }
     } catch (error) {
       console.error('Error deleting patrol:', error);
@@ -228,24 +331,25 @@ export function PolicePatrolManager() {
 
   const resetForm = () => {
     setFormData({
-      station_name: '',
-      station_code: '',
+      station_name: defaultPreset.station_name,
+      station_code: defaultPreset.station_code,
       latitude: '',
       longitude: '',
-      patrol_route_name: '',
-      patrol_area_description: '',
+      patrol_route_name: defaultPreset.patrol_route_name,
+      patrol_area_description: defaultPreset.patrol_area_description,
       shift_date: new Date().toISOString().split('T')[0],
-      shift_type: 'morning',
-      start_time: '06:00',
-      end_time: '14:00',
+      shift_type: defaultPreset.shift_type,
+      start_time: defaultPreset.start_time,
+      end_time: defaultPreset.end_time,
       officer_in_charge: '',
       officer_badge_number: '',
       patrol_vehicle_number: '',
       contact_number: '',
-      emergency_contact: '100',
-      coverage_radius_km: 2.0,
+      emergency_contact: defaultPreset.emergency_contact,
+      coverage_radius_km: defaultPreset.coverage_radius_km,
       created_by: 'admin'
     });
+    setSelectedPreset(defaultPreset.id);
   };
 
   const getStatusBadge = (status: string) => {
@@ -311,6 +415,23 @@ export function PolicePatrolManager() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Quick Presets</Label>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    {patrolPresets.map((preset) => (
+                      <Button
+                        key={preset.id}
+                        type="button"
+                        variant={selectedPreset === preset.id ? 'default' : 'outline'}
+                        className="h-auto justify-start px-3 py-2 text-left text-xs"
+                        onClick={() => applyPreset(preset.id)}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Station Details */}
                   <div>

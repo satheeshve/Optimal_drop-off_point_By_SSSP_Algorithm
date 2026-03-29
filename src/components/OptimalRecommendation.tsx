@@ -139,7 +139,7 @@ const OptimalRecommendation = ({ bestDropPoint, onHighlight }: OptimalRecommenda
           {/* Savings indicator */}
           <div className="p-4 rounded-2xl bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/30">
             <p className="text-sm text-center text-foreground font-medium">
-              💡 This route saves you significant time and money compared to staying on the college bus!
+              💡 This route saves significant time and fare compared to staying on the R.M.K CET shuttle till the end!
             </p>
           </div>
         </div>

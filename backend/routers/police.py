@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, date, timedelta
 
 from database import get_db, Base
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Time, Date
@@ -106,10 +106,10 @@ class PolicePatrolResponse(BaseModel):
     longitude: float
     patrol_route_name: str
     patrol_area_description: Optional[str]
-    shift_date: str
+    shift_date: date
     shift_type: str
-    start_time: str
-    end_time: str
+    start_time: time
+    end_time: time
     officer_in_charge: Optional[str]
     officer_badge_number: Optional[str]
     patrol_vehicle_number: Optional[str]
@@ -123,6 +123,25 @@ class PolicePatrolResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+def _is_patrol_active_now(patrol: PolicePatrol, now_dt: datetime) -> bool:
+    """Support same-day and overnight shifts (e.g. 22:00 to 06:00)."""
+    if not patrol.is_active:
+        return False
+
+    current_time = now_dt.time()
+    today = now_dt.date()
+    yesterday = today - timedelta(days=1)
+
+    if patrol.start_time <= patrol.end_time:
+        return patrol.shift_date == today and patrol.start_time <= current_time <= patrol.end_time
+
+    # Overnight shift window crosses midnight.
+    return (
+        (patrol.shift_date == today and current_time >= patrol.start_time)
+        or (patrol.shift_date == yesterday and current_time <= patrol.end_time)
+    )
 
 
 # API Endpoints
@@ -222,17 +241,16 @@ async def get_active_patrols(
     - shift_type: Filter by shift (morning/afternoon/evening/night)
     """
     from datetime import date, datetime as dt
-    
+
+    now_dt = dt.now()
     today = date.today()
-    current_time = dt.now().time()
-    
-    # Base query: active patrols for today
+    yesterday = today - timedelta(days=1)
+
+    # Include yesterday to account for overnight patrol windows.
     query = db.query(PolicePatrol).filter(
         and_(
-            PolicePatrol.shift_date == today,
-            PolicePatrol.is_active == True,
-            PolicePatrol.start_time <= current_time,
-            PolicePatrol.end_time >= current_time
+            PolicePatrol.shift_date.in_([today, yesterday]),
+            PolicePatrol.is_active == True
         )
     )
     
@@ -240,7 +258,7 @@ async def get_active_patrols(
     if shift_type:
         query = query.filter(PolicePatrol.shift_type == shift_type)
     
-    patrols = query.all()
+    patrols = [p for p in query.all() if _is_patrol_active_now(p, now_dt)]
     
     # Filter by proximity if location provided
     if latitude is not None and longitude is not None:
@@ -347,18 +365,17 @@ async def get_police_coverage_score(
     from datetime import date, datetime as dt
     from math import radians, sin, cos, sqrt, atan2, exp
     
+    now_dt = dt.now()
     today = date.today()
-    current_time = dt.now().time()
-    
-    # Get active patrols
+    yesterday = today - timedelta(days=1)
+
     active_patrols = db.query(PolicePatrol).filter(
         and_(
-            PolicePatrol.shift_date == today,
-            PolicePatrol.is_active == True,
-            PolicePatrol.start_time <= current_time,
-            PolicePatrol.end_time >= current_time
+            PolicePatrol.shift_date.in_([today, yesterday]),
+            PolicePatrol.is_active == True
         )
     ).all()
+    active_patrols = [p for p in active_patrols if _is_patrol_active_now(p, now_dt)]
     
     if not active_patrols:
         return {

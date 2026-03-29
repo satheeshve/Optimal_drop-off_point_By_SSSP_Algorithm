@@ -5,15 +5,12 @@ Implements multi-dimensional safety scoring as per paper Section III.D
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timedelta
-from geoalchemy2.shape import from_shape, to_shape
-from shapely.geometry import Point
 import math
 
-from database import get_db, HazardReport, SafetyScore, ReportStatus
+from database import get_db, HazardReport, SafetyScore, ReportStatus, HazardCategory
 from config import settings
 
 router = APIRouter()
@@ -58,26 +55,30 @@ def calculate_incident_score(db: Session, latitude: float, longitude: float) -> 
     Formula: S_incident(p) = 10(1 - Σ w(i)e^(-d/1000)e^(-t/90) / N_th)
     As per paper Section III.D.1
     """
-    point = from_shape(Point(longitude, latitude), srid=4326)
-    
-    # Get verified incidents within 2km in last 180 days
+    # Get recent verified incidents and filter by radius in Python for SQLite.
     time_threshold = datetime.utcnow() - timedelta(days=180)
-    
-    incidents = db.query(HazardReport).filter(
-        func.ST_DWithin(HazardReport.location, point, 2000, True),
+
+    candidate_incidents = db.query(HazardReport).filter(
         HazardReport.created_at >= time_threshold,
         HazardReport.status == ReportStatus.VERIFIED,
-        HazardReport.category.in_(['safety_concern', 'crime', 'accident'])
+        HazardReport.category.in_([
+            HazardCategory.SAFETY_CONCERN,
+            HazardCategory.CRIME,
+            HazardCategory.ACCIDENT,
+        ])
     ).all()
+
+    incidents = []
+    for report in candidate_incidents:
+        if haversine_distance(latitude, longitude, report.latitude, report.longitude) <= 2000:
+            incidents.append(report)
     
     if not incidents:
         return 10.0
     
     weighted_sum = 0.0
     for incident in incidents:
-        # Get distance
-        inc_shape = to_shape(incident.location)
-        distance = haversine_distance(latitude, longitude, inc_shape.y, inc_shape.x)
+        distance = haversine_distance(latitude, longitude, incident.latitude, incident.longitude)
         
         # Get time in days
         days_ago = (datetime.utcnow() - incident.created_at).days
@@ -100,17 +101,19 @@ def calculate_feedback_score(db: Session, latitude: float, longitude: float) -> 
     Formula: S_feedback(p) = Σ rating(r)e^(-age(r)/30)cred(r) / Σ e^(-age(r)/30)
     As per paper Section III.D.2
     """
-    point = from_shape(Point(longitude, latitude), srid=4326)
-    
-    # Get positive feedback reports within 1km in last 90 days
+    # Get positive feedback within 1km in last 90 days.
     time_threshold = datetime.utcnow() - timedelta(days=90)
-    
-    feedback = db.query(HazardReport).filter(
-        func.ST_DWithin(HazardReport.location, point, 1000, True),
+
+    candidate_feedback = db.query(HazardReport).filter(
         HazardReport.created_at >= time_threshold,
         HazardReport.status == ReportStatus.VERIFIED,
-        HazardReport.category == 'positive'
+        HazardReport.category == HazardCategory.POSITIVE
     ).all()
+
+    feedback = []
+    for report in candidate_feedback:
+        if haversine_distance(latitude, longitude, report.latitude, report.longitude) <= 1000:
+            feedback.append(report)
     
     if not feedback:
         return 5.0  # Neutral score
@@ -234,10 +237,9 @@ def calculate_safety_score(request: SafetyScoreRequest, db: Session = Depends(ge
         settings.SAFETY_WEIGHT_POLICE * police_score
     )
     
-    # Store in database
-    point = from_shape(Point(request.longitude, request.latitude), srid=4326)
     db_score = SafetyScore(
-        location=point,
+        latitude=request.latitude,
+        longitude=request.longitude,
         incident_score=round(incident_score, 2),
         feedback_score=round(feedback_score, 2),
         crowd_score=round(crowd_score, 2),

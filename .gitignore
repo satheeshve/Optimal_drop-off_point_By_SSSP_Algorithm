@@ -1,206 +1,94 @@
-# ===================================
-# Frontend (Node.js / Vite)
-# ===================================
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+build/
+coverage/
+*.tsbuildinfo
 
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# Dependencies
-node_modules
-package-lock.json
-
-# Build outputs
-dist
-dist-ssr
-build
-*.local
-
-# ===================================
-# Backend (Python / FastAPI)
-# ===================================
-
-# Python cache
+# Python / FastAPI
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
 
 # Virtual environments
-backend/venv/
-backend/env/
-backend/ENV/
-.venv
 venv/
+.venv/
 env/
+backend/venv/
+backend/.venv/
+backend/env/
 
-# Database
+# Local databases
 *.db
 *.db-journal
 *.sqlite
 *.sqlite3
-backend/commuter_genius.db
 backend/*.db
 
-# ===================================
-# Environment & Secrets
-# ===================================
-
-# Environment files (SECURITY CRITICAL)
+# Environment files (keep only templates/examples in git)
 .env
 .env.local
 .env.*.local
+.env.production.local
 backend/.env
 backend/.env.local
-.env.production.local
 backend/.env.production.local
-
-# Keep example files
 !.env.example
 !.env.docker
 !.env.production
 !backend/.env.example
 !backend/.env.production
 
-# Secrets and keys
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Docker
+docker/volumes/
+docker-compose.override.yml
+
+# IDE / editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.history/
+*.iml
+*.suo
+*.swp
+*.swo
+*~
+
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Temp / backup
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+*.old
+
+# Secrets / certs
 *.pem
 *.key
 *.crt
 *.p12
 secrets/
 ssl/
-
-# ===================================
-# Docker
-# ===================================
-
-# Docker volumes
-docker/volumes/
-docker-compose.override.yml
-
-# ===================================
-# Editor directories and files
-# ===================================
-
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-*.swp
-*.swo
-*~
-
-# ===================================
-# Testing & Coverage
-# ===================================
-
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.hypothesis/
-junit.xml
-coverage.xml
-
-# ===================================
-# OS Files
-# ===================================
-
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
-
-# Linux
-.directory
-.Trash-*
-
-# ===================================
-# Temporary Files
-# ===================================
-
-tmp/
-temp/
-*.tmp
-*.bak
-*.backup
-*_backup
-*_old
-
-# ===================================
-# Production & Deployment
-# ===================================
-
-# Don't commit production builds
-# (should be built on server)
-# dist/
-
-# Backup files
-backups/
-*.sql.gz
-*.dump
-
-# SSL certificates (use secrets management)
-*.crt
-*.pem
-*.key
-
-# ===================================
-# IDE / Tools
-# ===================================
-
-# JetBrains IDEs
-.idea/
-*.iml
-*.iws
-*.ipr
-
-# Visual Studio Code
-.history/
-
-# Vim
-[._]*.s[a-v][a-z]
-[._]*.sw[a-p]
-[._]s[a-rt-v][a-z]
-[._]ss[a-gi-z]
-[._]sw[a-p]
-
-# ===================================
-# Project Specific
-# ===================================
-
-# Large data files
-data/*.csv
-data/*.json
-!data/sample*.csv
-!data/sample*.json
-
-# User uploads (if any)
-uploads/
-media/
-
-# Generated documentation
-docs/_build/
-
-# Performance profiling
-*.prof
-*.lprof

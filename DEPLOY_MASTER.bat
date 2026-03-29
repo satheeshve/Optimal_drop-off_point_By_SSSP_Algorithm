@@ -203,7 +203,7 @@ echo ============================================
 echo.
 echo   Choose your deployment option:
 echo.
-echo   1. LOCAL DEMO (Development)
+echo   1. LOCAL RUN (Development)
 echo      - SQLite database
 echo      - Hot reload enabled
 echo      - Perfect for testing
@@ -226,21 +226,21 @@ choice /C 1234 /M "Select option"
 if errorlevel 4 goto :end
 if errorlevel 3 goto :docker_deploy
 if errorlevel 2 goto :prod_build
-if errorlevel 1 goto :local_demo
+if errorlevel 1 goto :local_run
 
 REM ============================================
-REM OPTION 1: LOCAL DEMO
+REM OPTION 1: LOCAL RUN
 REM ============================================
 
-:local_demo
+:local_run
 echo.
 echo ============================================
-echo  STARTING LOCAL DEMO
+echo  STARTING LOCAL RUN
 echo ============================================
 echo.
 
-if exist "START_DEMO.bat" (
-    call START_DEMO.bat
+if exist "START_LOCAL.bat" (
+    call START_LOCAL.bat
 ) else (
     echo Starting services manually...
     
@@ -408,7 +408,7 @@ echo   - PROJECT_COMPLETION_CHECKLIST.md - Final checklist
 echo   - docker/README.md - Docker-specific guide
 echo.
 echo   Quick Start Commands:
-echo   - START_DEMO.bat - Start local development
+echo   - START_LOCAL.bat - Start local development
 echo   - TEST_SYSTEM.bat - Run all tests
 echo   - BUILD_PRODUCTION.bat - Build for production
 echo.

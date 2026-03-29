@@ -15,7 +15,7 @@ import uvicorn
 import time
 
 from database import engine, Base, get_db
-from routers import hazards, safety, emergency, admin, routes, users, police
+from routers import hazards, safety, emergency, admin, routes, users, police, transit
 from config import settings
 
 # Initialize database tables
@@ -111,6 +111,7 @@ app.include_router(emergency.router, prefix="/api/emergency", tags=["Emergency R
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(routes.router, prefix="/api/routes", tags=["Route Planning"])
 app.include_router(police.router, prefix="/api/police", tags=["Police Patrol Management"])
+app.include_router(transit.router, prefix="/api/transit", tags=["Transit Live Tracking"])
 
 @app.get("/")
 async def root():

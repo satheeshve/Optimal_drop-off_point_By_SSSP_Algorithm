@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
-from geoalchemy2.shape import to_shape
 
 from database import get_db, HazardReport, User, AuditLog, ReportStatus
 from config import settings
@@ -137,12 +136,11 @@ def get_pending_hazards(
         
         priority = calculate_priority_score(report, user_credibility)
         
-        shape = to_shape(report.location)
         result.append(PriorityReportResponse(
             id=report.id,
             user_id=report.user_id,
-            latitude=shape.y,
-            longitude=shape.x,
+            latitude=report.latitude,
+            longitude=report.longitude,
             category=report.category.value,
             severity=report.severity.value,
             title=report.title,
